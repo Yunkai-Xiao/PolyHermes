@@ -1,0 +1,258 @@
+---
+alwaysApply: true
+path: frontend/**
+---
+
+# 前端开发规范
+
+## 代码完成规范
+
+### TODO 处理规则
+- **禁止**在代码中添加 TODO 注释
+- **必须**根据 TODO 的内容直接完成代码实现
+- 如果遇到暂时无法完全实现的功能，应该：
+  1. 实现一个可用的基础版本
+  2. 添加清晰的注释说明当前实现的限制和后续改进方向
+  3. 确保代码可以正常编译和运行
+- **禁止**使用 `// TODO: 实现XXX` 这样的注释
+- **禁止**使用 `// FIXME:` 或 `// XXX:` 这样的注释
+- 如果某个功能需要依赖外部资源（如 API、库等），应该：
+  1. 先实现一个占位或模拟实现
+  2. 在注释中说明依赖关系和实现方式
+  3. 确保代码逻辑完整，不会因为未实现的功能而崩溃
+
+### API 调用实现规则
+- **必须**查找相关的 API 文档或接口定义
+- **必须**根据 API 文档完成代码实现
+- **禁止**在 API 调用处添加 TODO 注释
+- 如果 API 文档不完整，应该：
+  1. 查找项目中已有的类似 API 调用作为参考
+  2. 查看 API 服务定义（如 `services/api.ts`）
+  3. 查看 API 文档（如 `docs/copy-trading-requirements.md`）
+  4. 实现一个可用的版本，包含错误处理
+
+### 代码完成示例
+
+```typescript
+// ❌ 错误：添加 TODO 注释
+const fetchAccountBalance = async (accountId: number) => {
+  // TODO: 调用 API 查询余额
+  return { balance: '0' }
+}
+
+// ✅ 正确：查找 API 定义并完成实现
+// 1. 查找 API 服务定义：services/api.ts 中的 accounts.balance
+// 2. 查找 API 文档：docs/copy-trading-requirements.md
+// 3. 实现完整的 API 调用逻辑
+const fetchAccountBalance = async (accountId: number) => {
+  try {
+    // 根据 API 服务定义调用接口
+    const response = await apiService.accounts.balance({ accountId })
+    
+    // 根据 API 响应格式处理数据
+    if (response.data.code === 0 && response.data.data) {
+      return response.data.data
+    } else {
+      // API 调用失败时返回默认值
+      console.warn('查询余额失败，返回默认值:', response.data.msg)
+      return { balance: '0' }
+    }
+  } catch (error) {
+    console.error('查询余额异常:', error)
+    // 异常时返回默认值，确保代码可以正常运行
+    return { balance: '0' }
+  }
+}
+```
+
+## 技术栈
+- **框架**: React + TypeScript
+- **UI库**: Ant Design 或 Material-UI（推荐 Ant Design Mobile 用于移动端）
+- **HTTP客户端**: axios
+- **状态管理**: Zustand 或 Redux
+- **响应式设计**: 必须支持移动端和桌面端
+
+## 移动端适配要求
+
+### 响应式设计
+- **必须支持移动端和桌面端**
+- 使用响应式布局（Responsive Design）
+- 移动端优先（Mobile First）设计原则
+- 支持触摸操作和手势
+
+### 断点设置
+- **移动端**: < 768px
+- **平板**: 768px - 1024px
+- **桌面端**: > 1024px
+
+### UI 组件适配
+- 使用 Ant Design 的响应式组件
+- 移动端使用 Ant Design Mobile（如果使用 Ant Design）
+- 表格使用虚拟滚动或分页（移动端性能优化）
+- 表单使用移动端友好的输入组件
+
+### 布局适配
+- 导航栏：移动端使用抽屉菜单，桌面端使用顶部导航
+- 列表：移动端使用卡片布局，桌面端使用表格布局
+- 按钮：移动端按钮尺寸不小于 44x44px（触摸友好）
+- 间距：移动端使用更大的间距，提高可点击区域
+
+### 性能优化
+- 图片懒加载
+- 代码分割（Code Splitting）
+- 移动端减少动画效果
+- 使用 CSS 媒体查询优化样式
+
+## 代码规范
+
+### 组件规范
+- 使用函数式组件
+- 使用 TypeScript 类型定义
+- 组件文件使用 PascalCase 命名
+
+```typescript
+// ✅ 正确
+interface MarketProps {
+  marketId: string;
+  platform: string;
+}
+
+export const MarketCard: React.FC<MarketProps> = ({ marketId, platform }) => {
+  // ...
+};
+
+// ❌ 错误
+export const marketCard = (props: any) => {  // 禁止使用any
+  // ...
+};
+```
+
+### API调用规范
+- 使用 axios 进行 HTTP 请求
+- 统一错误处理
+- 使用 TypeScript 定义响应类型
+
+```typescript
+// API服务
+import axios from 'axios';
+
+interface Market {
+  id: string;
+  marketId: string;
+  platform: string;
+  title: string;
+}
+
+export const marketService = {
+  getMarkets: async (): Promise<Market[]> => {
+    const response = await axios.get<Market[]>('/api/markets');
+    return response.data;
+  },
+  
+  getMarketById: async (id: string): Promise<Market> => {
+    const response = await axios.get<Market>(`/api/markets/${id}`);
+    return response.data;
+  }
+};
+```
+
+### 状态管理规范
+- 使用 Zustand 或 Redux 管理全局状态
+- 本地状态使用 `useState`
+- 复杂状态使用 `useReducer`
+
+```typescript
+// Zustand Store示例
+import { create } from 'zustand';
+
+interface MarketStore {
+  markets: Market[];
+  setMarkets: (markets: Market[]) => void;
+}
+
+export const useMarketStore = create<MarketStore>((set) => ({
+  markets: [],
+  setMarkets: (markets) => set({ markets }),
+}));
+```
+
+## 移动端适配示例
+
+### 响应式布局
+```typescript
+import { useMediaQuery } from 'react-responsive';
+
+const MyComponent: React.FC = () => {
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+  
+  return (
+    <div className={isMobile ? 'mobile-layout' : 'desktop-layout'}>
+      {isMobile ? <MobileView /> : <DesktopView />}
+    </div>
+  );
+};
+```
+
+### 移动端导航
+```typescript
+import { Drawer } from 'antd';
+
+const MobileNav: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>菜单</Button>
+      <Drawer
+        title="导航"
+        placement="left"
+        onClose={() => setOpen(false)}
+        open={open}
+      >
+        {/* 导航内容 */}
+      </Drawer>
+    </>
+  );
+};
+```
+
+### 响应式表格
+```typescript
+import { Table } from 'antd';
+
+const ResponsiveTable: React.FC = () => {
+  const isMobile = useMediaQuery({ maxWidth: 768 });
+  
+  return (
+    <Table
+      dataSource={data}
+      columns={columns}
+      scroll={{ x: isMobile ? 600 : 'auto' }}
+      pagination={{
+        pageSize: isMobile ? 10 : 20,
+        showSizeChanger: !isMobile
+      }}
+    />
+  );
+};
+```
+
+## 禁止事项
+
+### 代码质量
+- ❌ 禁止使用 `any` 类型
+- ❌ 禁止忽略错误处理
+- ❌ 禁止硬编码API地址
+- ❌ 禁止在组件中直接使用 `fetch`
+- ❌ 禁止忽略移动端适配
+
+### 类型安全
+- ❌ 禁止使用 `any`
+- ❌ 禁止忽略 TypeScript 类型检查
+- ❌ 禁止使用 `@ts-ignore` 除非有明确原因
+
+### 移动端适配
+- ❌ 禁止固定宽度布局
+- ❌ 禁止使用过小的触摸目标（< 44x44px）
+- ❌ 禁止忽略移动端性能优化
+- ❌ 禁止使用桌面端专用的交互方式（如 hover）
