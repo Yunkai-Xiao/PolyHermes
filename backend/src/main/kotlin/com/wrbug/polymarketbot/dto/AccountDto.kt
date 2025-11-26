@@ -96,3 +96,39 @@ data class PositionDto(
     val pnl: String? = null
 )
 
+/**
+ * 账户仓位信息（用于仓位管理页面）
+ */
+data class AccountPositionDto(
+    val accountId: Long,
+    val accountName: String?,
+    val walletAddress: String,
+    val proxyAddress: String,
+    val marketId: String,
+    val marketTitle: String?,
+    val marketSlug: String?,
+    val marketIcon: String?,  // 市场图标 URL
+    val side: String,  // YES 或 NO
+    val quantity: String,
+    val avgPrice: String,
+    val currentPrice: String,
+    val currentValue: String,
+    val initialValue: String,
+    val pnl: String,
+    val percentPnl: String,
+    val realizedPnl: String?,
+    val percentRealizedPnl: String?,
+    val redeemable: Boolean,
+    val mergeable: Boolean,
+    val endDate: String?,
+    val isCurrent: Boolean = true  // true: 当前仓位（有持仓），false: 历史仓位（已平仓）
+)
+
+/**
+ * 仓位列表响应
+ */
+data class PositionListResponse(
+    val currentPositions: List<AccountPositionDto>,
+    val historyPositions: List<AccountPositionDto>
+)
+

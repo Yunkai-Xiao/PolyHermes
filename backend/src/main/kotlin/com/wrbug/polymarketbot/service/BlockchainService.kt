@@ -216,13 +216,15 @@ class BlockchainService(
      * 通过 Polymarket Data API 查询
      * 文档: https://docs.polymarket.com/api-reference/core/get-current-positions-for-a-user
      */
-    suspend fun getPositions(proxyWalletAddress: String): Result<List<PositionResponse>> {
+    suspend fun getPositions(proxyWalletAddress: String, sortBy: String? = "CURRENT"): Result<List<PositionResponse>> {
         return try {
             // 使用代理钱包地址查询仓位
+            // sortBy=CURRENT 表示只返回当前仓位
             val response = dataApi.getPositions(
                 user = proxyWalletAddress,
                 limit = 500,  // 最大限制
-                offset = 0
+                offset = 0,
+                sortBy = sortBy
             )
             
             if (response.isSuccessful && response.body() != null) {

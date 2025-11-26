@@ -151,3 +151,39 @@ export interface Statistics {
   maxLoss: string
 }
 
+/**
+ * 账户仓位信息
+ */
+export interface AccountPosition {
+  accountId: number
+  accountName?: string
+  walletAddress: string
+  proxyAddress: string
+  marketId: string
+  marketTitle?: string
+  marketSlug?: string
+  marketIcon?: string  // 市场图标 URL
+  side: string  // YES 或 NO
+  quantity: string
+  avgPrice: string
+  currentPrice: string
+  currentValue: string
+  initialValue: string
+  pnl: string
+  percentPnl: string
+  realizedPnl?: string
+  percentRealizedPnl?: string
+  redeemable: boolean
+  mergeable: boolean
+  endDate?: string
+  isCurrent: boolean  // true: 当前仓位（有持仓），false: 历史仓位（已平仓）
+}
+
+/**
+ * 仓位列表响应
+ */
+export interface PositionListResponse {
+  currentPositions: AccountPosition[]
+  historyPositions: AccountPosition[]
+}
+

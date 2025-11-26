@@ -41,9 +41,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: '跟单配置'
     },
     {
-      key: '/orders',
+      key: '/positions',
       icon: <UnorderedListOutlined />,
-      label: '订单管理'
+      label: '仓位管理'
     },
     {
       key: '/statistics',
@@ -108,8 +108,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   // 桌面端布局
   return (
-    <AntLayout style={{ minHeight: '100vh' }}>
-      <Sider width={200} style={{ background: '#001529' }}>
+    <AntLayout style={{ height: '100vh', overflow: 'hidden' }}>
+      <Sider 
+        width={200} 
+        style={{ 
+          background: '#001529',
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          overflow: 'hidden'
+        }}
+      >
         <div style={{ 
           height: '64px', 
           display: 'flex', 
@@ -117,7 +127,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           justifyContent: 'center',
           color: '#fff',
           fontSize: '18px',
-          fontWeight: 'bold'
+          fontWeight: 'bold',
+          flexShrink: 0
         }}>
           Polymarket 跟单
         </div>
@@ -126,11 +137,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => handleMenuClick(key)}
-          style={{ height: 'calc(100vh - 64px)', borderRight: 0 }}
+          style={{ 
+            height: 'calc(100vh - 64px)', 
+            borderRight: 0,
+            overflowY: 'auto'
+          }}
         />
       </Sider>
-      <AntLayout>
-        <Content style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+      <AntLayout style={{ marginLeft: 200, height: '100vh' }}>
+        <Content style={{ 
+          padding: '24px', 
+          background: '#f0f2f5', 
+          height: '100vh',
+          overflowY: 'auto'
+        }}>
           {children}
         </Content>
       </AntLayout>

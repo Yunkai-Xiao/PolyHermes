@@ -6,6 +6,7 @@ import com.wrbug.polymarketbot.entity.Account
 import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
+import com.wrbug.polymarketbot.util.eq
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -547,6 +548,84 @@ class AccountService(
         // 私钥格式：64 位十六进制字符（可选 0x 前缀）
         val cleanKey = if (privateKey.startsWith("0x")) privateKey.substring(2) else privateKey
         return cleanKey.length == 64 && cleanKey.matches(Regex("^[0-9a-fA-F]{64}$"))
+    }
+    
+    /**
+     * 查询所有账户的仓位列表
+     * 返回所有账户的仓位信息，包括账户信息
+     */
+    suspend fun getAllPositions(): Result<PositionListResponse> {
+        return try {
+            val accounts = accountRepository.findAll()
+            val currentPositions = mutableListOf<AccountPositionDto>()
+            val historyPositions = mutableListOf<AccountPositionDto>()
+            
+            // 遍历所有账户，查询每个账户的仓位
+            accounts.forEach { account ->
+                if (account.proxyAddress.isNotBlank()) {
+                    try {
+                        // 查询所有仓位（不限制 sortBy，获取当前和历史仓位）
+                        val positionsResult = blockchainService.getPositions(account.proxyAddress, sortBy = null)
+                        if (positionsResult.isSuccess) {
+                            val positions = positionsResult.getOrNull() ?: emptyList()
+                            // 遍历所有仓位，区分当前仓位和历史仓位
+                            positions.forEach { pos ->
+                                val currentValue = pos.currentValue?.toSafeBigDecimal() ?: BigDecimal.ZERO
+                                val curPrice = pos.curPrice?.toSafeBigDecimal() ?: BigDecimal.ZERO
+                                
+                                // 判断是否为当前仓位：currentValue != 0 且 curPrice != 0
+                                // 使用 eq 方法判断值是否等于 0
+                                val isCurrent = !currentValue.eq(BigDecimal.ZERO) && !curPrice.eq(BigDecimal.ZERO)
+                                
+                                val positionDto = AccountPositionDto(
+                                    accountId = account.id!!,
+                                    accountName = account.accountName,
+                                    walletAddress = account.walletAddress,
+                                    proxyAddress = account.proxyAddress,
+                                    marketId = pos.conditionId ?: "",
+                                    marketTitle = pos.title ?: "",
+                                    marketSlug = pos.slug ?: "",
+                                    marketIcon = pos.icon,  // 市场图标
+                                    side = pos.outcome ?: "",
+                                    quantity = pos.size?.toString() ?: "0",
+                                    avgPrice = pos.avgPrice?.toString() ?: "0",
+                                    currentPrice = pos.curPrice?.toString() ?: "0",
+                                    currentValue = pos.currentValue?.toString() ?: "0",
+                                    initialValue = pos.initialValue?.toString() ?: "0",
+                                    pnl = pos.cashPnl?.toString() ?: "0",
+                                    percentPnl = pos.percentPnl?.toString() ?: "0",
+                                    realizedPnl = pos.realizedPnl?.toString(),
+                                    percentRealizedPnl = pos.percentRealizedPnl?.toString(),
+                                    redeemable = pos.redeemable ?: false,
+                                    mergeable = pos.mergeable ?: false,
+                                    endDate = pos.endDate,
+                                    isCurrent = isCurrent  // 标识是当前仓位还是历史仓位
+                                )
+                                
+                                // 根据 isCurrent 分别添加到对应的列表
+                                if (isCurrent) {
+                                    currentPositions.add(positionDto)
+                                } else {
+                                    historyPositions.add(positionDto)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        logger.warn("查询账户 ${account.id} 仓位失败: ${e.message}", e)
+                    }
+                }
+            }
+            
+            // 按照接口返回的顺序返回，不进行排序
+            // 前端负责本地排序
+            Result.success(PositionListResponse(
+                currentPositions = currentPositions,
+                historyPositions = historyPositions
+            ))
+        } catch (e: Exception) {
+            logger.error("查询所有仓位失败: ${e.message}", e)
+            Result.failure(e)
+        }
     }
     
     /**

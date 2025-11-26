@@ -61,6 +61,7 @@ fun BigInteger.multi(value: Any): BigDecimal {
 /**
  * 大于比较扩展函数
  * 安全地比较两个任意类型的数值大小
+ * 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
  * @param target 比较目标值
  * @return 如果当前值大于目标值返回true，否则返回false（null值返回false）
  */
@@ -68,12 +69,16 @@ fun Any?.gt(target: Any?): Boolean {
     if (this == null || target == null) {
         return false
     }
-    return this.toSafeBigDecimal() > target.toSafeBigDecimal()
+    val thisValue = this.toSafeBigDecimal()
+    val targetValue = target.toSafeBigDecimal()
+    // 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
+    return thisValue.compareTo(targetValue) > 0
 }
 
 /**
  * 大于等于比较扩展函数
  * 安全地比较两个任意类型的数值大小
+ * 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
  * @param target 比较目标值
  * @return 如果当前值大于等于目标值返回true，否则返回false（null值返回false）
  */
@@ -81,12 +86,16 @@ fun Any?.gte(target: Any?): Boolean {
     if (this == null || target == null) {
         return false
     }
-    return this.toSafeBigDecimal() >= target.toSafeBigDecimal()
+    val thisValue = this.toSafeBigDecimal()
+    val targetValue = target.toSafeBigDecimal()
+    // 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
+    return thisValue.compareTo(targetValue) >= 0
 }
 
 /**
  * 小于比较扩展函数
  * 安全地比较两个任意类型的数值大小
+ * 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
  * @param target 比较目标值
  * @return 如果当前值小于目标值返回true，否则返回false（null值返回false）
  */
@@ -94,12 +103,16 @@ fun Any?.lt(target: Any?): Boolean {
     if (this == null || target == null) {
         return false
     }
-    return this.toSafeBigDecimal() < target.toSafeBigDecimal()
+    val thisValue = this.toSafeBigDecimal()
+    val targetValue = target.toSafeBigDecimal()
+    // 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
+    return thisValue.compareTo(targetValue) < 0
 }
 
 /**
  * 小于等于比较扩展函数
  * 安全地比较两个任意类型的数值大小
+ * 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
  * @param target 比较目标值
  * @return 如果当前值小于等于目标值返回true，否则返回false（null值返回false）
  */
@@ -107,12 +120,16 @@ fun Any?.lte(target: Any?): Boolean {
     if (this == null || target == null) {
         return false
     }
-    return this.toSafeBigDecimal() <= target.toSafeBigDecimal()
+    val thisValue = this.toSafeBigDecimal()
+    val targetValue = target.toSafeBigDecimal()
+    // 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
+    return thisValue.compareTo(targetValue) <= 0
 }
 
 /**
  * 等于比较扩展函数
  * 安全地比较两个任意类型的数值是否相等
+ * 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
  * @param target 比较目标值
  * @return 如果当前值等于目标值返回true，否则返回false（null值返回false）
  */
@@ -120,12 +137,17 @@ fun Any?.eq(target: Any?): Boolean {
     if (this == null || target == null) {
         return false
     }
-    return this.toSafeBigDecimal() == target.toSafeBigDecimal()
+    val thisValue = this.toSafeBigDecimal()
+    val targetValue = target.toSafeBigDecimal()
+    // 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
+    // 例如："0.0" 和 "0" 在数值上相等，但 scale 不同
+    return thisValue.compareTo(targetValue) == 0
 }
 
 /**
  * 不等于比较扩展函数
  * 安全地比较两个任意类型的数值是否不相等
+ * 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
  * @param target 比较目标值
  * @return 如果当前值不等于目标值返回true，否则返回false（null值返回false）
  */
@@ -133,6 +155,9 @@ fun Any?.neq(target: Any?): Boolean {
     if (this == null || target == null) {
         return false
     }
-    return this.toSafeBigDecimal() != target.toSafeBigDecimal()
+    val thisValue = this.toSafeBigDecimal()
+    val targetValue = target.toSafeBigDecimal()
+    // 使用 compareTo 方法比较，避免 BigDecimal 的 scale 问题
+    return thisValue.compareTo(targetValue) != 0
 }
 

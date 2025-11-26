@@ -2,6 +2,7 @@ package com.wrbug.polymarketbot.controller
 
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.service.AccountService
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -202,6 +203,30 @@ class AccountController(
         } catch (e: Exception) {
             logger.error("设置默认账户异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.serverError("设置默认账户失败: ${e.message}"))
+        }
+    }
+    
+    /**
+     * 查询所有账户的仓位列表
+     */
+    @PostMapping("/positions/list")
+    fun getAllPositions(): ResponseEntity<ApiResponse<PositionListResponse>> {
+        return try {
+            val result = runBlocking { accountService.getAllPositions() }
+            result.fold(
+                onSuccess = { positionListResponse ->
+                    val total = positionListResponse.currentPositions.size + positionListResponse.historyPositions.size
+                    logger.info("成功查询仓位列表: 当前仓位 ${positionListResponse.currentPositions.size} 个，历史仓位 ${positionListResponse.historyPositions.size} 个，共 $total 个")
+                    ResponseEntity.ok(ApiResponse.success(positionListResponse))
+                },
+                onFailure = { e ->
+                    logger.error("查询仓位列表失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.serverError("查询仓位列表失败: ${e.message}"))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("查询仓位列表异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.serverError("查询仓位列表失败: ${e.message}"))
         }
     }
 }

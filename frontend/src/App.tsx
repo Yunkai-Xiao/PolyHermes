@@ -9,7 +9,7 @@ import AccountEdit from './pages/AccountEdit'
 import LeaderList from './pages/LeaderList'
 import LeaderAdd from './pages/LeaderAdd'
 import ConfigPage from './pages/ConfigPage'
-import OrderList from './pages/OrderList'
+import PositionList from './pages/PositionList'
 import Statistics from './pages/Statistics'
 
 function App() {
@@ -26,7 +26,7 @@ function App() {
             <Route path="/leaders" element={<LeaderList />} />
             <Route path="/leaders/add" element={<LeaderAdd />} />
             <Route path="/config" element={<ConfigPage />} />
-            <Route path="/orders" element={<OrderList />} />
+            <Route path="/positions" element={<PositionList />} />
             <Route path="/statistics" element={<Statistics />} />
           </Routes>
         </Layout>
