@@ -105,11 +105,23 @@ export const apiService = {
     sellPosition: (data: any) => 
       apiClient.post<ApiResponse<any>>('/copy-trading/accounts/positions/sell', data),
     
+  },
+  
+  /**
+   * 市场数据 API
+   */
+  markets: {
     /**
-     * 获取市场价格
+     * 获取市场价格（通过 Gamma API）
      */
-    getMarketPrice: (data: any) => 
-      apiClient.post<ApiResponse<any>>('/copy-trading/accounts/markets/price', data)
+    getMarketPrice: (data: { marketId: string }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/markets/price', data),
+    
+    /**
+     * 获取最新价（从订单表获取，供前端下单时显示）
+     */
+    getLatestPrice: (data: { tokenId: string }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/markets/latest-price', data)
   },
   
   /**

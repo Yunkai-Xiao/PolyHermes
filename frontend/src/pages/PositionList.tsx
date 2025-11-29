@@ -252,7 +252,7 @@ const PositionList: React.FC = () => {
     
     // 加载市场价格
     try {
-      const response = await apiService.accounts.getMarketPrice({ marketId: position.marketId })
+      const response = await apiService.markets.getMarketPrice({ marketId: position.marketId })
       if (response.data.code === 0 && response.data.data) {
         setMarketPrice(response.data.data)
         // 默认使用最优买价作为限价
@@ -324,7 +324,8 @@ const PositionList: React.FC = () => {
       const request: PositionSellRequest = {
         accountId: selectedPosition.accountId,
         marketId: selectedPosition.marketId,
-        side: selectedPosition.side as 'YES' | 'NO',
+        side: selectedPosition.side,
+        outcomeIndex: selectedPosition.outcomeIndex,  // 传递 outcomeIndex
         orderType: orderType,
         quantity: sellQuantity,
         price: orderType === 'LIMIT' ? limitPrice : undefined
@@ -791,70 +792,70 @@ const PositionList: React.FC = () => {
     
     // 只有当前仓位才显示盈亏和已实现盈亏列
     if (positionFilter === 'current') {
-      baseColumns.push(
-        {
-          title: '盈亏',
-          dataIndex: 'pnl',
-          key: 'pnl',
-          render: (pnl: string, record: AccountPosition) => {
-            const pnlNum = parseFloat(pnl || '0')
-            const percentPnl = parseFloat(record.percentPnl || '0')
-            return (
-              <div>
-                <div style={{ 
-                  color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
-                  fontWeight: 'bold'
-                }}>
-                  {pnlNum >= 0 ? '+' : ''}{formatNumber(pnl, 2)} USDC
-                </div>
+    baseColumns.push(
+      {
+        title: '盈亏',
+        dataIndex: 'pnl',
+        key: 'pnl',
+        render: (pnl: string, record: AccountPosition) => {
+          const pnlNum = parseFloat(pnl || '0')
+          const percentPnl = parseFloat(record.percentPnl || '0')
+          return (
+            <div>
+              <div style={{ 
+                color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
+                fontWeight: 'bold'
+              }}>
+                {pnlNum >= 0 ? '+' : ''}{formatNumber(pnl, 2)} USDC
+              </div>
+              <div style={{ 
+                fontSize: '12px',
+                color: percentPnl >= 0 ? '#3f8600' : '#cf1322'
+              }}>
+                {formatPercent(record.percentPnl)}
+              </div>
+            </div>
+          )
+        },
+        align: 'right' as const,
+        width: 150,
+        sorter: (a: AccountPosition, b: AccountPosition) => {
+          const pnlA = parseFloat(a.pnl || '0')
+          const pnlB = parseFloat(b.pnl || '0')
+          return pnlA - pnlB
+        }
+      },
+      {
+        title: '已实现盈亏',
+        dataIndex: 'realizedPnl',
+        key: 'realizedPnl',
+        render: (realizedPnl: string | undefined, record: AccountPosition) => {
+          if (!realizedPnl) return '-'
+          const pnlNum = parseFloat(realizedPnl)
+          const percentPnl = parseFloat(record.percentRealizedPnl || '0')
+          return (
+            <div>
+              <div style={{ 
+                color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
+                fontWeight: 'bold'
+              }}>
+                {pnlNum >= 0 ? '+' : ''}{formatNumber(realizedPnl, 2)} USDC
+              </div>
+              {record.percentRealizedPnl && (
                 <div style={{ 
                   fontSize: '12px',
                   color: percentPnl >= 0 ? '#3f8600' : '#cf1322'
                 }}>
-                  {formatPercent(record.percentPnl)}
+                  {formatPercent(record.percentRealizedPnl)}
                 </div>
-              </div>
-            )
-          },
-          align: 'right' as const,
-          width: 150,
-          sorter: (a: AccountPosition, b: AccountPosition) => {
-            const pnlA = parseFloat(a.pnl || '0')
-            const pnlB = parseFloat(b.pnl || '0')
-            return pnlA - pnlB
-          }
+              )}
+            </div>
+          )
         },
-        {
-          title: '已实现盈亏',
-          dataIndex: 'realizedPnl',
-          key: 'realizedPnl',
-          render: (realizedPnl: string | undefined, record: AccountPosition) => {
-            if (!realizedPnl) return '-'
-            const pnlNum = parseFloat(realizedPnl)
-            const percentPnl = parseFloat(record.percentRealizedPnl || '0')
-            return (
-              <div>
-                <div style={{ 
-                  color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
-                  fontWeight: 'bold'
-                }}>
-                  {pnlNum >= 0 ? '+' : ''}{formatNumber(realizedPnl, 2)} USDC
-                </div>
-                {record.percentRealizedPnl && (
-                  <div style={{ 
-                    fontSize: '12px',
-                    color: percentPnl >= 0 ? '#3f8600' : '#cf1322'
-                  }}>
-                    {formatPercent(record.percentRealizedPnl)}
-                  </div>
-                )}
-              </div>
-            )
-          },
-          align: 'right' as const,
-          width: 150
-        }
-      )
+        align: 'right' as const,
+        width: 150
+      }
+    )
     }
     
     // 只有当前仓位才显示操作列
@@ -910,7 +911,7 @@ const PositionList: React.FC = () => {
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h2 style={{ margin: 0 }}>仓位管理</h2>
+          <h2 style={{ margin: 0 }}>仓位管理</h2>
             {/* WebSocket 连接状态指示器 */}
             <Tag 
               color={wsConnected ? 'green' : 'orange'} 
@@ -976,9 +977,9 @@ const PositionList: React.FC = () => {
                   return nameA.localeCompare(nameB, 'zh-CN')
                 })
                 .map(account => ({
-                  value: account.id,
-                  label: account.accountName || `账户 ${account.id}`
-                }))
+                value: account.id,
+                label: account.accountName || `账户 ${account.id}`
+              }))
             ]}
           />
           <div style={{
@@ -988,10 +989,10 @@ const PositionList: React.FC = () => {
             display: 'inline-flex',
             gap: '4px'
           }}>
-            <Radio.Group 
-              value={positionFilter} 
-              onChange={(e) => setPositionFilter(e.target.value)}
-              size={isMobile ? 'small' : 'middle'}
+          <Radio.Group 
+            value={positionFilter} 
+            onChange={(e) => setPositionFilter(e.target.value)}
+            size={isMobile ? 'small' : 'middle'}
               style={{ display: 'flex', gap: '4px' }}
             >
               <Radio.Button 
@@ -1027,7 +1028,7 @@ const PositionList: React.FC = () => {
                     {currentCount}
                   </Tag>
                 </span>
-              </Radio.Button>
+            </Radio.Button>
               <Radio.Button 
                 value="historical"
                 style={{
@@ -1061,8 +1062,8 @@ const PositionList: React.FC = () => {
                     {historicalCount}
                   </Tag>
                 </span>
-              </Radio.Button>
-            </Radio.Group>
+            </Radio.Button>
+          </Radio.Group>
           </div>
         </div>
       </div>
@@ -1082,20 +1083,20 @@ const PositionList: React.FC = () => {
           )}
         </Card>
       ) : (
-        <Card>
-          <Table
-            dataSource={filteredPositions}
-            columns={columns}
-            rowKey={(record, index) => `${record.accountId}-${record.marketId}-${index}`}
-            loading={loading}
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: !isMobile,
-              showTotal: (total) => `共 ${total} 个仓位${searchKeyword ? `（已过滤）` : ''}`
-            }}
-            scroll={isMobile ? { x: 1500 } : undefined}
-          />
-        </Card>
+      <Card>
+        <Table
+          dataSource={filteredPositions}
+          columns={columns}
+          rowKey={(record, index) => `${record.accountId}-${record.marketId}-${index}`}
+          loading={loading}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: !isMobile,
+            showTotal: (total) => `共 ${total} 个仓位${searchKeyword ? `（已过滤）` : ''}`
+          }}
+          scroll={isMobile ? { x: 1500 } : undefined}
+        />
+      </Card>
       )}
       
       {/* 出售模态框 */}

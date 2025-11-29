@@ -51,11 +51,21 @@ interface PolymarketClobApi {
     
     /**
      * 创建单个订单
+     * 文档: https://docs.polymarket.com/developers/CLOB/orders/create-order
+     * 端点: POST /order（注意是单数，不是 /orders）
+     * 需要 L2 认证
+     * 
+     * 请求格式：
+     * {
+     *   "order": { signed order object },
+     *   "owner": "api key",
+     *   "orderType": "GTC" | "FOK" | "GTD" | "FAK"
+     * }
      */
-    @POST("/orders")
+    @POST("/order")
     suspend fun createOrder(
-        @Body request: CreateOrderRequest
-    ): Response<OrderResponse>
+        @Body request: NewOrderRequest
+    ): Response<NewOrderResponse>
     
     /**
      * 批量创建订单
@@ -148,15 +158,64 @@ interface PolymarketClobApi {
 }
 
 // 请求和响应数据类
+
+/**
+ * 签名的订单对象（根据官方文档）
+ * 参考: https://docs.polymarket.com/developers/CLOB/orders/create-order
+ */
+data class SignedOrderObject(
+    val salt: Long,                    // random salt used to create unique order
+    val maker: String,                  // maker address (funder)
+    val signer: String,                 // signing address
+    val taker: String,                  // taker address (operator)
+    val tokenId: String,                // ERC1155 token ID of conditional token being traded
+    val makerAmount: String,            // maximum amount maker is willing to spend
+    val takerAmount: String,            // minimum amount taker will pay the maker in return
+    val expiration: String,             // unix expiration timestamp
+    val nonce: String,                  // maker's exchange nonce of the order is associated
+    val feeRateBps: String,             // fee rate basis points as required by the operator
+    val side: String,                   // buy or sell enum index ("BUY" or "SELL")
+    val signatureType: Int,             // signature type enum index
+    val signature: String               // hex encoded signature
+)
+
+/**
+ * 创建订单请求（根据官方文档）
+ * 参考: https://docs.polymarket.com/developers/CLOB/orders/create-order
+ */
+data class NewOrderRequest(
+    val order: SignedOrderObject,       // signed object
+    val owner: String,                  // api key of order owner
+    val orderType: String,              // order type ("FOK", "GTC", "GTD", "FAK")
+    val deferExec: Boolean = false      // defer execution flag
+)
+
+/**
+ * 创建订单响应（根据官方文档）
+ */
+data class NewOrderResponse(
+    val success: Boolean,               // boolean indicating if server-side error
+    val errorMsg: String? = null,       // error message in case of unsuccessful placement
+    val orderId: String? = null,        // id of order
+    val orderHashes: List<String>? = null // hash of settlement transaction order was marketable and triggered a match
+)
+
+/**
+ * 旧的订单请求格式（已废弃，保留用于兼容）
+ * @deprecated 使用 NewOrderRequest 代替
+ */
+@Deprecated("使用 NewOrderRequest 代替，需要签名的订单对象")
 data class CreateOrderRequest(
-    val market: String,
-    val side: String,  // "BUY" or "SELL"
+    val market: String? = null,      // condition ID（可选，如果提供tokenId则不需要）
+    val token_id: String? = null,    // token ID（可选，如果提供market则不需要）
+    val side: String,                // "BUY" or "SELL"
     val price: String,
     val size: String,
     val type: String = "LIMIT",
     val expiration: Long? = null
 )
 
+@Deprecated("使用 NewOrderRequest 代替")
 data class CreateOrdersBatchRequest(
     val orders: List<CreateOrderRequest>
 )
@@ -284,5 +343,14 @@ data class ApiKeyResponse(
  */
 data class ServerTimeResponse(
     val timestamp: Long
+)
+
+/**
+ * 最新价响应（从订单表获取）
+ */
+data class LatestPriceResponse(
+    val tokenId: String,
+    val bestBid: String?,  // 最高买入价
+    val bestAsk: String?   // 最低卖出价
 )
 

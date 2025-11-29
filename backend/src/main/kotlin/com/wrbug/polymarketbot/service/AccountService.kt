@@ -23,10 +23,17 @@ class AccountService(
     private val retrofitFactory: RetrofitFactory,
     private val blockchainService: BlockchainService,
     private val apiKeyService: PolymarketApiKeyService,
-    private val orderPushService: OrderPushService
+    private val orderPushService: OrderPushService,
+    private val orderSigningService: OrderSigningService
 ) {
 
     private val logger = LoggerFactory.getLogger(AccountService::class.java)
+    
+    // 市价单价格调整系数（在最优价基础上调整，确保更快成交）
+    // 市价买单：bestAsk + BUY_PRICE_ADJUSTMENT（加价，确保能立即成交）
+    // 市价卖单：bestBid - SELL_PRICE_ADJUSTMENT（减价，确保能立即成交）
+    private val BUY_PRICE_ADJUSTMENT = BigDecimal("0.01")   // 买单价格调整系数（+0.01）
+    private val SELL_PRICE_ADJUSTMENT = BigDecimal("0.02")  // 卖单价格调整系数（-0.02）
 
     /**
      * 通过私钥导入账户
@@ -605,6 +612,7 @@ class AccountService(
                                     marketSlug = pos.slug ?: "",
                                     marketIcon = pos.icon,  // 市场图标
                                     side = pos.outcome ?: "",
+                                    outcomeIndex = pos.outcomeIndex,  // 添加 outcomeIndex
                                     quantity = pos.size?.toString() ?: "0",
                                     avgPrice = pos.avgPrice?.toString() ?: "0",
                                     currentPrice = pos.curPrice?.toString() ?: "0",
@@ -691,40 +699,105 @@ class AccountService(
                 }
             )
             
-            // 3. 确定卖出价格
-            val sellPrice = if (request.orderType == "MARKET") {
-                // 市价订单：获取当前最优买价
-                val priceResult = clobService.getPrice(request.marketId)
-                priceResult.fold(
-                    onSuccess = { priceResponse ->
-                        priceResponse.bestBid ?: priceResponse.lastPrice
-                            ?: return Result.failure(IllegalStateException("无法获取市场价格，请稍后重试"))
-                    },
-                    onFailure = { e ->
-                        return Result.failure(Exception("获取市场价格失败: ${e.message}"))
+            // 3. 获取 tokenId（从 conditionId 和 outcomeIndex 计算）
+            // 需要先获取 tokenId，以便后续通过 CLOB API 获取三元及以上市场的价格
+            // 优先使用 outcomeIndex，如果没有则尝试从 side 推断（仅支持 YES/NO）
+            val tokenIdResult = if (request.outcomeIndex != null) {
+                blockchainService.getTokenId(request.marketId, request.outcomeIndex)
+            } else {
+                // 向后兼容：尝试从 side 推断（仅支持 YES/NO）
+                when (request.side.uppercase()) {
+                    "YES" -> blockchainService.getTokenId(request.marketId, 0)
+                    "NO" -> blockchainService.getTokenId(request.marketId, 1)
+                    else -> {
+                        logger.warn("无法从 side 推断 outcomeIndex，需要提供 outcomeIndex: side=${request.side}")
+                        Result.failure<String>(IllegalArgumentException("无法从 side '${request.side}' 推断 outcomeIndex，请提供 outcomeIndex 参数"))
                     }
-                )
+                }
+            }
+            val tokenId = tokenIdResult.getOrNull()
+            
+            if (tokenId == null) {
+                logger.warn("无法获取 tokenId，将使用 market 参数: conditionId=${request.marketId}, side=${request.side}, outcomeIndex=${request.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
+            }
+            
+            // 4. 验证 tokenId
+            if (tokenId == null) {
+                return Result.failure(IllegalStateException("无法获取 tokenId，无法创建订单。请确保已配置 Ethereum RPC URL 或提供 outcomeIndex 参数"))
+            }
+            
+            // 5. 确定卖出价格
+            // 市价单：从订单表获取最优价（通过 tokenId 获取对应 outcome 的订单表）
+            // - 市价卖单：从订单表获取 bestBid（最高买入价），然后减去 SELL_PRICE_ADJUSTMENT
+            // - 市价买单：从订单表获取 bestAsk（最低卖出价），然后加上 BUY_PRICE_ADJUSTMENT
+            // 限价订单：使用用户输入的价格
+            // 注意：使用 outcomeIndex 和 tokenId 支持多元市场（二元、三元及以上）
+            // 如果无法获取订单表，将抛出异常
+            val sellPrice = if (request.orderType == "MARKET") {
+                try {
+                    // 市价单：从订单表获取最优价（卖出订单，需要 bestBid）
+                    // 通过 tokenId 获取对应 outcome 的订单表，支持多元市场
+                    getOptimalPriceFromOrderbook(tokenId, isSellOrder = true)
+                } catch (e: IllegalStateException) {
+                    logger.error("无法获取订单表最优价: ${e.message}", e)
+                    return Result.failure(IllegalStateException("无法获取订单表最优价: ${e.message}"))
+                }
             } else {
                 // 限价订单：使用用户输入的价格
                 request.price ?: return Result.failure(IllegalArgumentException("限价订单必须提供价格"))
             }
             
-            // 4. 验证价格
+            // 6. 验证价格
             val priceDecimal = sellPrice.toSafeBigDecimal()
             if (priceDecimal <= BigDecimal.ZERO) {
                 return Result.failure(IllegalArgumentException("价格必须大于0"))
             }
             
-            // 5. 创建订单请求
-            val orderRequest = com.wrbug.polymarketbot.api.CreateOrderRequest(
-                market = request.marketId,
-                side = "SELL",  // 卖出订单
-                price = sellPrice,
-                size = request.quantity,
-                type = if (request.orderType == "MARKET") "MARKET" else "LIMIT"
+            // 7. 确定订单类型和过期时间
+            // 根据官方文档：
+            // - GTC (Good-Til-Cancelled): expiration 必须为 "0"
+            // - GTD (Good-Til-Date): expiration 为具体的 Unix 时间戳（秒）
+            // - FOK (Fill-Or-Kill): expiration 必须为 "0"
+            // - FAK (Fill-And-Kill): expiration 必须为 "0"
+            val orderType = when (request.orderType) {
+                "MARKET" -> "FAK"  // Fill-And-Kill（与官方市价单一致，允许部分成交）
+                "LIMIT" -> "GTC"   // Good-Til-Cancelled
+                else -> "GTC"
+            }
+            
+            // GTC 和 FOK 订单的 expiration 必须为 "0"
+            // 只有 GTD 订单才需要设置具体的过期时间
+            val expiration = "0"
+            
+            // 7. 创建并签名订单
+            val signedOrder = try {
+                orderSigningService.createAndSignOrder(
+                    privateKey = account.privateKey,
+                    makerAddress = account.proxyAddress,  // 使用代理地址作为 maker
+                    tokenId = tokenId,
+                    side = "SELL",
+                    price = sellPrice,
+                    size = request.quantity,
+                    signatureType = 2,  // Browser Wallet（与正确订单数据一致）
+                    nonce = "0",
+                    feeRateBps = "0",
+                    expiration = expiration
+                )
+            } catch (e: Exception) {
+                logger.error("创建并签名订单失败", e)
+                return Result.failure(Exception("创建并签名订单失败: ${e.message}"))
+            }
+            
+            // 8. 构建订单请求
+            
+            val newOrderRequest = com.wrbug.polymarketbot.api.NewOrderRequest(
+                order = signedOrder,
+                owner = account.apiKey!!,  // API Key
+                orderType = orderType,
+                deferExec = false
             )
             
-            // 6. 使用账户的API凭证创建订单
+            // 9. 使用账户的API凭证创建订单
             val clobApi = retrofitFactory.createClobApi(
                 account.apiKey!!,
                 account.apiSecret!!,
@@ -732,29 +805,63 @@ class AccountService(
                 account.walletAddress
             )
             
-            val orderResponse = clobApi.createOrder(orderRequest)
+            logger.info("创建卖出订单: market=${request.marketId}, side=${request.side}, orderType=${request.orderType}, quantity=${request.quantity}, price=$sellPrice, tokenId=$tokenId")
+            
+            val orderResponse = clobApi.createOrder(newOrderRequest)
             
             if (orderResponse.isSuccessful && orderResponse.body() != null) {
-                val order = orderResponse.body()!!
-                Result.success(
-                    PositionSellResponse(
-                        orderId = order.id,
-                        marketId = request.marketId,
-                        side = request.side,
-                        orderType = request.orderType,
-                        quantity = request.quantity,
-                        price = if (request.orderType == "LIMIT") sellPrice else null,
-                        status = order.status,
-                        createdAt = System.currentTimeMillis()
+                val response = orderResponse.body()!!
+                if (response.success) {
+                    logger.info("订单创建成功: orderId=${response.orderId}, orderHashes=${response.orderHashes}")
+                    Result.success(
+                        PositionSellResponse(
+                            orderId = response.orderId ?: "",
+                            marketId = request.marketId,
+                            side = request.side,
+                            orderType = request.orderType,
+                            quantity = request.quantity,
+                            price = if (request.orderType == "LIMIT") sellPrice else null,
+                            status = "pending",  // 订单状态需要从响应中获取
+                            createdAt = System.currentTimeMillis()
+                        )
                     )
-                )
+                } else {
+                    val errorMsg = response.errorMsg ?: "未知错误"
+                    logger.error("创建订单失败: $errorMsg")
+                    Result.failure(Exception("创建订单失败: $errorMsg"))
+                }
             } else {
-                Result.failure(Exception("创建订单失败: ${orderResponse.code()} ${orderResponse.message()}"))
+                val errorBody = try {
+                    orderResponse.errorBody()?.string()
+                } catch (e: Exception) {
+                    null
+                }
+                logger.error("创建订单失败: code=${orderResponse.code()}, message=${orderResponse.message()}, errorBody=$errorBody")
+                Result.failure(Exception("创建订单失败: ${orderResponse.code()} ${orderResponse.message()}${if (errorBody != null) " - $errorBody" else ""}"))
             }
         } catch (e: Exception) {
             logger.error("卖出仓位异常: ${e.message}", e)
             Result.failure(e)
         }
+    }
+    
+    /**
+     * 从订单表获取最优价（用于市价单）
+     * 支持多元市场（二元、三元及以上）
+     * 委托给 PolymarketClobService.getOptimalPrice 方法
+     * 
+     * @param tokenId token ID（通过 marketId 和 outcomeIndex 计算得出）
+     * @param isSellOrder 是否为卖出订单（true: 卖单，需要 bestBid；false: 买单，需要 bestAsk）
+     * @return 最优价格（已应用调整系数）
+     * @throws IllegalStateException 如果无法获取订单表或订单表为空
+     */
+    private suspend fun getOptimalPriceFromOrderbook(tokenId: String, isSellOrder: Boolean): String {
+        return clobService.getOptimalPrice(
+            tokenId = tokenId,
+            isSellOrder = isSellOrder,
+            buyPriceAdjustment = BUY_PRICE_ADJUSTMENT,
+            sellPriceAdjustment = SELL_PRICE_ADJUSTMENT
+        )
     }
     
     /**

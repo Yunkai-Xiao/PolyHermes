@@ -39,6 +39,12 @@ class BlockchainService(
     // 合约地址: 0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b
     private val proxyFactoryContractAddress = "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b"
     
+    // ConditionalTokens 合约地址（Polygon 主网）
+    private val conditionalTokensAddress = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+    
+    // 空集合ID（用于计算collectionId）
+    private val EMPTY_SET = "0x0000000000000000000000000000000000000000000000000000000000000000"
+    
     // 获取代理地址的函数签名
     // 根据 Polygonscan 的 F4 方法，函数签名为: computeProxyAddress(address)
     private val computeProxyAddressFunctionSignature = "computeProxyAddress(address)"
@@ -240,6 +246,125 @@ class BlockchainService(
             logger.error("查询持仓信息失败: ${e.message}", e)
             Result.failure(e)
         }
+    }
+    
+    /**
+     * 从 condition ID 和 outcomeIndex 计算 tokenId
+     * 使用链上合约调用计算：
+     * 1. getCollectionId(EMPTY_SET, conditionId, indexSet) -> collectionId
+     * 2. getPositionId(collateralToken, collectionId) -> tokenId
+     * 
+     * indexSet 的计算：indexSet = 2^outcomeIndex
+     * - outcomeIndex = 0 -> indexSet = 1 (2^0)
+     * - outcomeIndex = 1 -> indexSet = 2 (2^1)
+     * - outcomeIndex = 2 -> indexSet = 4 (2^2)
+     * 
+     * @param conditionId condition ID（16进制字符串，如 "0x..."）
+     * @param outcomeIndex 结果索引（0, 1, 2...）
+     * @return tokenId（BigInteger 的字符串表示）
+     */
+    suspend fun getTokenId(conditionId: String, outcomeIndex: Int): Result<String> {
+        return try {
+            // 如果未配置 RPC URL，返回错误
+            if (ethereumRpcUrl.isBlank()) {
+                logger.warn("未配置 Ethereum RPC URL，无法计算 tokenId")
+                return Result.failure(IllegalStateException("未配置 Ethereum RPC URL，无法计算 tokenId"))
+            }
+            
+            val rpcApi = ethereumRpcApi ?: throw IllegalStateException("Ethereum RPC URL 未配置")
+            
+            // 验证 outcomeIndex
+            if (outcomeIndex < 0) {
+                return Result.failure(IllegalArgumentException("outcomeIndex 必须 >= 0"))
+            }
+            
+            // 计算 indexSet：indexSet = 2^outcomeIndex
+            val indexSet = BigInteger.TWO.pow(outcomeIndex)
+            
+            // 1. 调用 getCollectionId(EMPTY_SET, conditionId, indexSet)
+            val getCollectionIdSelector = EthereumUtils.getFunctionSelector("getCollectionId(bytes32,bytes32,uint256)")
+            val encodedEmptySet = EthereumUtils.encodeBytes32(EMPTY_SET)
+            val encodedConditionId = EthereumUtils.encodeBytes32(conditionId)
+            val encodedIndexSet = EthereumUtils.encodeUint256(indexSet)
+            // getFunctionSelector 已经返回带 0x 前缀的字符串，所以直接拼接即可
+            val collectionIdData = getCollectionIdSelector + encodedEmptySet + encodedConditionId + encodedIndexSet
+            
+            val collectionIdRequest = JsonRpcRequest(
+                method = "eth_call",
+                params = listOf(
+                    mapOf(
+                        "to" to conditionalTokensAddress,
+                        "data" to collectionIdData  // 移除多余的 0x 前缀
+                    ),
+                    "latest"
+                )
+            )
+            
+            val collectionIdResponse = rpcApi.call(collectionIdRequest)
+            if (!collectionIdResponse.isSuccessful || collectionIdResponse.body() == null) {
+                return Result.failure(Exception("调用 getCollectionId 失败: ${collectionIdResponse.code()} ${collectionIdResponse.message()}"))
+            }
+            
+            val collectionIdResult = collectionIdResponse.body()!!
+            if (collectionIdResult.error != null) {
+                return Result.failure(Exception("调用 getCollectionId 失败: ${collectionIdResult.error}"))
+            }
+            
+            val collectionId = collectionIdResult.result ?: return Result.failure(Exception("getCollectionId 返回结果为空"))
+            
+            // 2. 调用 getPositionId(collateralToken, collectionId)
+            val getPositionIdSelector = EthereumUtils.getFunctionSelector("getPositionId(address,bytes32)")
+            val encodedCollateral = EthereumUtils.encodeAddress(usdcContractAddress)
+            val encodedCollectionId = EthereumUtils.encodeBytes32(collectionId)
+            // getFunctionSelector 已经返回带 0x 前缀的字符串，所以直接拼接即可
+            val positionIdData = getPositionIdSelector + encodedCollateral + encodedCollectionId
+            
+            val positionIdRequest = JsonRpcRequest(
+                method = "eth_call",
+                params = listOf(
+                    mapOf(
+                        "to" to conditionalTokensAddress,
+                        "data" to positionIdData  // 移除多余的 0x 前缀
+                    ),
+                    "latest"
+                )
+            )
+            
+            val positionIdResponse = rpcApi.call(positionIdRequest)
+            if (!positionIdResponse.isSuccessful || positionIdResponse.body() == null) {
+                return Result.failure(Exception("调用 getPositionId 失败: ${positionIdResponse.code()} ${positionIdResponse.message()}"))
+            }
+            
+            val positionIdResult = positionIdResponse.body()!!
+            if (positionIdResult.error != null) {
+                return Result.failure(Exception("调用 getPositionId 失败: ${positionIdResult.error}"))
+            }
+            
+            val tokenId = positionIdResult.result ?: return Result.failure(Exception("getPositionId 返回结果为空"))
+            val tokenIdBigInt = EthereumUtils.decodeUint256(tokenId)
+            
+            Result.success(tokenIdBigInt.toString())
+        } catch (e: Exception) {
+            logger.error("计算 tokenId 失败: conditionId=$conditionId, outcomeIndex=$outcomeIndex, ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 从 condition ID 和 side (YES/NO) 计算 tokenId（向后兼容方法）
+     * 仅支持二元市场（YES/NO）
+     * 
+     * @param conditionId condition ID（16进制字符串，如 "0x..."）
+     * @param side YES 或 NO
+     * @return tokenId（BigInteger 的字符串表示）
+     */
+    suspend fun getTokenIdBySide(conditionId: String, side: String): Result<String> {
+        val outcomeIndex = when (side.uppercase()) {
+            "YES" -> 0
+            "NO" -> 1
+            else -> return Result.failure(IllegalArgumentException("side 必须是 YES 或 NO（仅支持二元市场）"))
+        }
+        return getTokenId(conditionId, outcomeIndex)
     }
     
     /**

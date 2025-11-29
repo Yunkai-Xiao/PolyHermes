@@ -111,7 +111,8 @@ data class AccountPositionDto(
     val marketTitle: String?,
     val marketSlug: String?,
     val marketIcon: String?,  // 市场图标 URL
-    val side: String,  // YES 或 NO
+    val side: String,  // 结果名称（如 "YES", "NO", "Pakistan" 等）
+    val outcomeIndex: Int? = null,  // 结果索引（0, 1, 2...），用于计算 tokenId
     val quantity: String,
     val avgPrice: String,
     val currentPrice: String,
@@ -141,7 +142,8 @@ data class PositionListResponse(
 data class PositionSellRequest(
     val accountId: Long,           // 账户ID（必需）
     val marketId: String,          // 市场ID（必需）
-    val side: String,              // 方向：YES 或 NO（必需）
+    val side: String,              // 结果名称（如 "YES", "NO", "Pakistan" 等）（必需）
+    val outcomeIndex: Int? = null, // 结果索引（0, 1, 2...），用于计算 tokenId（推荐提供）
     val orderType: String,         // 订单类型：MARKET（市价）或 LIMIT（限价）（必需）
     val quantity: String,          // 卖出数量（必需，BigDecimal字符串）
     val price: String? = null      // 限价价格（限价订单必需，市价订单不需要）
@@ -166,6 +168,13 @@ data class PositionSellResponse(
  */
 data class MarketPriceRequest(
     val marketId: String  // 市场ID
+)
+
+/**
+ * 获取最新价请求（通过 tokenId）
+ */
+data class LatestPriceRequest(
+    val tokenId: String  // token ID（通过 marketId 和 outcomeIndex 计算得出）
 )
 
 /**

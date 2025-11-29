@@ -163,7 +163,8 @@ export interface AccountPosition {
   marketTitle?: string
   marketSlug?: string
   marketIcon?: string  // 市场图标 URL
-  side: string  // YES 或 NO
+  side: string  // 结果名称（如 "YES", "NO", "Pakistan" 等）
+  outcomeIndex?: number  // 结果索引（0, 1, 2...），用于计算 tokenId
   quantity: string
   avgPrice: string
   currentPrice: string
@@ -193,7 +194,8 @@ export interface PositionListResponse {
 export interface PositionSellRequest {
   accountId: number
   marketId: string
-  side: 'YES' | 'NO'
+  side: string  // 结果名称（如 "YES", "NO", "Pakistan" 等）
+  outcomeIndex?: number  // 结果索引（0, 1, 2...），用于计算 tokenId（推荐提供）
   orderType: 'MARKET' | 'LIMIT'
   quantity: string
   price?: string  // 限价订单必需

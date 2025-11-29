@@ -7,11 +7,11 @@ import { Wallet } from "@ethersproject/wallet";
 
 const host = 'https://clob.polymarket.com';
 const funder = ''; //This is the address listed below your profile picture when using the Polymarket site.
-const signer = new Wallet("[PRIVATE_KEY_REMOVED]"); //This is your Private Key. If using email login export from https://reveal.magic.link/polymarket otherwise export from your Web3 Application
+const signer = new Wallet(process.env.PRIVATE_KEY || ""); //This is your Private Key. If using email login export from https://reveal.magic.link/polymarket otherwise export from your Web3 Application
 
 
 //In general don't create a new API key, always derive or createOrDerive
-const creds = new ClobClient(host, 137, signer).createOrDeriveApiKey();
+const creds = new ClobClient(host, 137, signer).deleteApiKey();
 
 //1: Magic/Email Login
 //2: Browser Wallet(Metamask, Coinbase Wallet, etc)
@@ -22,8 +22,8 @@ const signatureType = 1;
     const clobClient = new ClobClient(host, 137, signer, await creds, signatureType, funder);
     const resp2 = await clobClient.createAndPostOrder(
         {
-            tokenID: "114304586861386186441621124384163963092522056897081085884483958561365015034812", //Use https://docs.polymarket.com/developers/gamma-markets-api/get-markets to grab a sample token
-            price: 0.01,
+            tokenID: "87660119269436753918591605029528224889066452434179554814663664703244066132110", //Use https://docs.polymarket.com/developers/gamma-markets-api/get-markets to grab a sample token
+            price: 0.37,
             side: Side.BUY,
             size: 5,
             feeRateBps: 0,

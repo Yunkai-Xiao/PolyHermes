@@ -243,8 +243,9 @@ class AccountController(
             if (request.marketId.isBlank()) {
                 return ResponseEntity.ok(ApiResponse.paramError("市场ID不能为空"))
             }
-            if (request.side !in listOf("YES", "NO")) {
-                return ResponseEntity.ok(ApiResponse.paramError("方向必须是YES或NO"))
+            // side 可以是任意结果名称（如 "YES", "NO", "Pakistan" 等），不再限制为 YES/NO
+            if (request.side.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("方向不能为空"))
             }
             if (request.orderType !in listOf("MARKET", "LIMIT")) {
                 return ResponseEntity.ok(ApiResponse.paramError("订单类型必须是MARKET或LIMIT"))
@@ -277,31 +278,5 @@ class AccountController(
         }
     }
     
-    /**
-     * 获取市场价格
-     */
-    @PostMapping("/markets/price")
-    fun getMarketPrice(@RequestBody request: MarketPriceRequest): ResponseEntity<ApiResponse<MarketPriceResponse>> {
-        return try {
-            if (request.marketId.isBlank()) {
-                return ResponseEntity.ok(ApiResponse.paramError("市场ID不能为空"))
-            }
-            
-            val result = runBlocking { accountService.getMarketPrice(request.marketId) }
-            result.fold(
-                onSuccess = { response ->
-                    logger.info("成功获取市场价格: 市场=${request.marketId}")
-                    ResponseEntity.ok(ApiResponse.success(response))
-                },
-                onFailure = { e ->
-                    logger.error("获取市场价格失败: ${e.message}", e)
-                    ResponseEntity.ok(ApiResponse.serverError("获取市场价格失败: ${e.message}"))
-                }
-            )
-        } catch (e: Exception) {
-            logger.error("获取市场价格异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("获取市场价格失败: ${e.message}"))
-        }
-    }
 }
 
