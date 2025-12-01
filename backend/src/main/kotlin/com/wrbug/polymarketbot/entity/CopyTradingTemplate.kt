@@ -1,0 +1,68 @@
+package com.wrbug.polymarketbot.entity
+
+import jakarta.persistence.*
+import java.math.BigDecimal
+import com.wrbug.polymarketbot.util.toSafeBigDecimal
+
+/**
+ * 跟单模板实体
+ */
+@Entity
+@Table(name = "copy_trading_templates")
+data class CopyTradingTemplate(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Long? = null,
+    
+    @Column(name = "template_name", unique = true, nullable = false, length = 100)
+    val templateName: String,  // 模板名称
+    
+    @Column(name = "copy_mode", nullable = false, length = 10)
+    val copyMode: String = "RATIO",  // "RATIO" 或 "FIXED"
+    
+    @Column(name = "copy_ratio", nullable = false, precision = 10, scale = 2)
+    val copyRatio: BigDecimal = BigDecimal.ONE,  // 仅在 copyMode="RATIO" 时生效
+    
+    @Column(name = "fixed_amount", precision = 20, scale = 8)
+    val fixedAmount: BigDecimal? = null,  // 仅在 copyMode="FIXED" 时生效
+    
+    @Column(name = "max_order_size", nullable = false, precision = 20, scale = 8)
+    val maxOrderSize: BigDecimal = "1000".toSafeBigDecimal(),
+    
+    @Column(name = "min_order_size", nullable = false, precision = 20, scale = 8)
+    val minOrderSize: BigDecimal = "1".toSafeBigDecimal(),
+    
+    @Column(name = "max_daily_loss", nullable = false, precision = 20, scale = 8)
+    val maxDailyLoss: BigDecimal = "10000".toSafeBigDecimal(),
+    
+    @Column(name = "max_daily_orders", nullable = false)
+    val maxDailyOrders: Int = 100,
+    
+    @Column(name = "price_tolerance", nullable = false, precision = 5, scale = 2)
+    val priceTolerance: BigDecimal = "5".toSafeBigDecimal(),  // 百分比
+    
+    @Column(name = "delay_seconds", nullable = false)
+    val delaySeconds: Int = 0,
+    
+    @Column(name = "poll_interval_seconds", nullable = false)
+    val pollIntervalSeconds: Int = 5,  // 轮询间隔（仅在 WebSocket 不可用时使用）
+    
+    @Column(name = "use_websocket", nullable = false)
+    val useWebSocket: Boolean = true,  // 是否优先使用 WebSocket 推送
+    
+    @Column(name = "websocket_reconnect_interval", nullable = false)
+    val websocketReconnectInterval: Int = 5000,  // WebSocket 重连间隔（毫秒）
+    
+    @Column(name = "websocket_max_retries", nullable = false)
+    val websocketMaxRetries: Int = 10,  // WebSocket 最大重试次数
+    
+    @Column(name = "support_sell", nullable = false)
+    val supportSell: Boolean = true,  // 是否支持跟单卖出
+    
+    @Column(name = "created_at", nullable = false)
+    val createdAt: Long = System.currentTimeMillis(),
+    
+    @Column(name = "updated_at", nullable = false)
+    var updatedAt: Long = System.currentTimeMillis()
+)
+

@@ -12,6 +12,11 @@ import LeaderAdd from './pages/LeaderAdd'
 import ConfigPage from './pages/ConfigPage'
 import PositionList from './pages/PositionList'
 import Statistics from './pages/Statistics'
+import TemplateList from './pages/TemplateList'
+import TemplateAdd from './pages/TemplateAdd'
+import TemplateEdit from './pages/TemplateEdit'
+import CopyTradingList from './pages/CopyTradingList'
+import CopyTradingAdd from './pages/CopyTradingAdd'
 import { wsManager } from './services/websocket'
 import type { OrderPushMessage } from './types'
 
@@ -124,6 +129,11 @@ function App() {
             <Route path="/accounts/edit" element={<AccountEdit />} />
             <Route path="/leaders" element={<LeaderList />} />
             <Route path="/leaders/add" element={<LeaderAdd />} />
+            <Route path="/templates" element={<TemplateList />} />
+            <Route path="/templates/add" element={<TemplateAdd />} />
+            <Route path="/templates/edit/:id" element={<TemplateEdit />} />
+            <Route path="/copy-trading" element={<CopyTradingList />} />
+            <Route path="/copy-trading/add" element={<CopyTradingAdd />} />
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/positions" element={<PositionList />} />
             <Route path="/statistics" element={<Statistics />} />

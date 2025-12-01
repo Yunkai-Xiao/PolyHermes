@@ -143,13 +143,13 @@ export const apiService = {
     /**
      * 添加 Leader
      */
-    add: (data: any) => 
+    add: (data: { leaderAddress: string; leaderName?: string; category?: string }) => 
       apiClient.post<ApiResponse<any>>('/copy-trading/leaders/add', data),
     
     /**
      * 更新 Leader
      */
-    update: (data: any) => 
+    update: (data: { leaderId: number; leaderName?: string; category?: string }) => 
       apiClient.post<ApiResponse<any>>('/copy-trading/leaders/update', data),
     
     /**
@@ -161,25 +161,90 @@ export const apiService = {
     /**
      * 查询 Leader 列表
      */
-    list: (data: { enabled?: boolean; category?: string } = {}) => 
-      apiClient.post<ApiResponse<any>>('/copy-trading/leaders/list', data)
+    list: (data: { category?: string } = {}) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/leaders/list', data),
+    
+    /**
+     * 查询 Leader 详情
+     */
+    detail: (data: { leaderId: number }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/leaders/detail', data)
   },
   
   /**
-   * 配置管理 API
+   * 跟单模板管理 API（子菜单：跟单模板）
    */
-  config: {
+  templates: {
     /**
-     * 获取全局配置
+     * 创建模板
      */
-    get: () => 
-      apiClient.post<ApiResponse<any>>('/copy-trading/config/get', {}),
+    create: (data: any) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/templates/create', data),
     
     /**
-     * 更新全局配置
+     * 更新模板
      */
     update: (data: any) => 
-      apiClient.post<ApiResponse<void>>('/copy-trading/config/update', data)
+      apiClient.post<ApiResponse<any>>('/copy-trading/templates/update', data),
+    
+    /**
+     * 删除模板
+     */
+    delete: (data: { templateId: number }) => 
+      apiClient.post<ApiResponse<void>>('/copy-trading/templates/delete', data),
+    
+    /**
+     * 复制模板
+     */
+    copy: (data: any) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/templates/copy', data),
+    
+    /**
+     * 查询模板列表
+     */
+    list: () => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/templates/list', {}),
+    
+    /**
+     * 查询模板详情
+     */
+    detail: (data: { templateId: number }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/templates/detail', data)
+  },
+  
+  /**
+   * 跟单配置管理 API（子菜单：跟单配置）
+   */
+  copyTrading: {
+    /**
+     * 创建跟单
+     */
+    create: (data: { accountId: number; templateId: number; leaderId: number; enabled?: boolean }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/create', data),
+    
+    /**
+     * 查询跟单列表
+     */
+    list: (data: { accountId?: number; templateId?: number; leaderId?: number; enabled?: boolean } = {}) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/list', data),
+    
+    /**
+     * 更新跟单状态
+     */
+    updateStatus: (data: { copyTradingId: number; enabled: boolean }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/update-status', data),
+    
+    /**
+     * 删除跟单
+     */
+    delete: (data: { copyTradingId: number }) => 
+      apiClient.post<ApiResponse<void>>('/copy-trading/delete', data),
+    
+    /**
+     * 查询钱包绑定的模板
+     */
+    getAccountTemplates: (data: { accountId: number }) => 
+      apiClient.post<ApiResponse<any>>('/copy-trading/account-templates', data)
   },
   
   /**

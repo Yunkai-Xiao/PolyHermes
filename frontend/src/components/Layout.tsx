@@ -1,15 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Layout as AntLayout, Menu, Drawer, Button } from 'antd'
 import { useMediaQuery } from 'react-responsive'
 import {
   WalletOutlined,
   UserOutlined,
-  SettingOutlined,
   UnorderedListOutlined,
   BarChartOutlined,
-  MenuOutlined
+  MenuOutlined,
+  FileTextOutlined,
+  LinkOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons'
+import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
 
 const { Header, Content, Sider } = AntLayout
@@ -24,7 +27,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   
-  const menuItems = [
+  // 获取当前选中的菜单项
+  const getSelectedKeys = (): string[] => {
+    return [location.pathname]
+  }
+  
+  // 获取当前应该打开的父菜单
+  const getInitialOpenKeys = (): string[] => {
+    const path = location.pathname
+    if (path.startsWith('/templates') || path.startsWith('/copy-trading')) {
+      return ['/copy-trading-management']
+    }
+    return []
+  }
+  
+  const [openKeys, setOpenKeys] = useState<string[]>(getInitialOpenKeys())
+  
+  // 当路径变化时，自动打开对应的父菜单
+  useEffect(() => {
+    const path = location.pathname
+    if (path.startsWith('/templates') || path.startsWith('/copy-trading')) {
+      setOpenKeys(['/copy-trading-management'])
+    }
+  }, [location.pathname])
+  
+  const menuItems: MenuProps['items'] = [
     {
       key: '/accounts',
       icon: <WalletOutlined />,
@@ -36,9 +63,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       label: 'Leader 管理'
     },
     {
-      key: '/config',
-      icon: <SettingOutlined />,
-      label: '跟单配置'
+      key: '/copy-trading-management',
+      icon: <AppstoreOutlined />,
+      label: '跟单管理',
+      children: [
+        {
+          key: '/templates',
+          icon: <FileTextOutlined />,
+          label: '跟单模板'
+        },
+        {
+          key: '/copy-trading',
+          icon: <LinkOutlined />,
+          label: '跟单配置'
+        }
+      ]
     },
     {
       key: '/positions',
@@ -52,11 +91,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   ]
   
-  const handleMenuClick = (key: string) => {
+  const handleMenuClick = ({ key }: { key: string }) => {
+    // 如果是父菜单，不导航
+    if (key === '/copy-trading-management') {
+      return
+    }
     navigate(key)
     if (isMobile) {
       setMobileMenuOpen(false)
     }
+  }
+  
+  const handleOpenChange = (keys: string[]) => {
+    setOpenKeys(keys)
   }
   
   if (isMobile) {
@@ -96,9 +143,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         >
           <Menu
             mode="inline"
-            selectedKeys={[location.pathname]}
+            selectedKeys={getSelectedKeys()}
+            openKeys={openKeys}
+            onOpenChange={handleOpenChange}
             items={menuItems}
-            onClick={({ key }) => handleMenuClick(key)}
+            onClick={handleMenuClick}
             style={{ border: 'none' }}
           />
         </Drawer>
@@ -134,9 +183,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={getSelectedKeys()}
+          openKeys={openKeys}
+          onOpenChange={handleOpenChange}
           items={menuItems}
-          onClick={({ key }) => handleMenuClick(key)}
+          onClick={handleMenuClick}
           style={{ 
             height: 'calc(100vh - 64px)', 
             borderRight: 0,

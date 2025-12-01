@@ -146,18 +146,18 @@
 
 ### 2.2 被跟单者（Leader）管理
 
-#### 2.1.1 添加被跟单者
+#### 2.2.1 添加被跟单者
 - **功能**：添加新的被跟单者
 - **输入参数**：
   - `leaderAddress`: 被跟单者的钱包地址（必需）
   - `leaderName`: 被跟单者名称（可选，用于显示）
   - `category`: 分类筛选（sports/crypto，可选，仅跟单该分类的交易）
-  - `enabled`: 是否启用跟单（默认 true）
 - **业务规则**：
   - 验证地址格式
   - 检查是否已存在
   - 支持分类筛选
   - 验证 Leader 地址不能与自己的地址相同
+  - **注意**：Leader 的启用状态由跟单关系管理，不再在 Leader 层面设置
 
 #### 2.2.2 删除被跟单者
 - **功能**：删除被跟单者，停止跟单
@@ -167,60 +167,207 @@
   - 删除前取消所有相关的跟单订单
   - 保留历史跟单记录
 
-#### 2.1.3 更新被跟单者
-- **功能**：更新被跟单者配置
+#### 2.2.3 更新被跟单者
+- **功能**：更新被跟单者信息
 - **输入参数**：
   - `leaderId`: 被跟单者ID
   - `leaderName`: 名称（可选）
   - `category`: 分类筛选（可选）
-  - `enabled`: 是否启用（可选）
+- **业务规则**：
+  - 不能修改地址
+  - 启用状态由跟单关系管理，不在此处设置
 
-#### 2.1.4 查询被跟单者列表
+#### 2.2.4 查询被跟单者列表
 - **功能**：获取所有被跟单者列表
 - **输入参数**：
-  - `enabled`: 是否只返回启用的（可选）
   - `category`: 分类筛选（可选）
 - **返回数据**：
   - 被跟单者列表
   - 每个 Leader 的统计信息（跟单订单数、盈亏等）
+  - 每个 Leader 的跟单关系数量
 
-### 2.3 跟单配置管理
+### 2.3 跟单模板管理
 
-#### 2.2.1 全局跟单配置
-- **功能**：设置全局跟单参数
-- **配置项**：
+#### 2.3.1 模板概念
+- **功能**：创建和管理跟单模板，模板包含跟单参数配置
+- **模板作用**：模板可以被多个钱包复用，实现配置的统一管理
+- **模板与钱包关系**：多对多关系，一个钱包可以绑定多个模板，一个模板可以被多个钱包使用
+
+#### 2.3.2 创建模板
+- **功能**：创建新的跟单模板
+- **输入参数**：
+  - `templateName`: 模板名称（必需，用于标识模板）
+    - 说明：模板的唯一标识名称，用于区分不同的跟单配置模板
+    - 限制：模板名称必须唯一，不能与其他模板重名
   - `copyMode`: 跟单金额模式（"RATIO" 或 "FIXED"，默认 "RATIO"）
-    - `RATIO`: 比例模式，跟单金额 = Leader 订单金额 × copyRatio
+    - 说明：选择跟单金额的计算方式
+    - `RATIO`: 比例模式，跟单金额 = Leader 订单金额 × (copyRatio / 100)
+      - 适用场景：希望跟单金额随 Leader 订单大小按比例变化
+      - 例如：Leader 买入 100 USDC，跟单比例 50%，则跟单金额为 50 USDC
     - `FIXED`: 固定金额模式，跟单金额 = fixedAmount（固定值）
-  - `copyRatio`: 跟单比例（0.1-10.0，默认 1.0，仅在 copyMode="RATIO" 时生效）
-  - `fixedAmount`: 固定跟单金额（USDC，仅在 copyMode="FIXED" 时生效）
-  - `maxOrderSize`: 单笔订单最大金额（USDC）
-  - `minOrderSize`: 单笔订单最小金额（USDC）
-  - `maxDailyLoss`: 每日最大亏损限制（USDC）
-  - `maxDailyOrders`: 每日最大跟单订单数
-  - `priceTolerance`: 价格容忍度（百分比，0-100，默认 5%）
-  - `delaySeconds`: 跟单延迟（秒，默认 0，立即跟单）
-  - `useWebSocket`: 是否优先使用 WebSocket 推送（默认 true）
-  - `websocketReconnectInterval`: WebSocket 重连间隔（毫秒，默认 5000）
-  - `websocketMaxRetries`: WebSocket 最大重试次数（默认 10）
-  - `enabled`: 是否启用全局跟单（默认 true）
+      - 适用场景：希望无论 Leader 订单大小如何，跟单金额都固定不变
+      - 例如：无论 Leader 买入多少，跟单金额始终为 10 USDC
+  - `copyRatio`: 跟单比例（可选，百分比格式，10%-1000%，默认 100%，仅在 copyMode="RATIO" 时生效）
+    - 说明：跟单比例表示跟单金额相对于 Leader 订单金额的百分比
+    - 例如：100% 表示跟单金额 = Leader 订单金额 × 1.0（1:1 跟单）
+    - 例如：50% 表示跟单金额 = Leader 订单金额 × 0.5（半仓跟单）
+    - 例如：200% 表示跟单金额 = Leader 订单金额 × 2.0（双倍跟单）
+    - 后端存储：百分比值除以 100 后存储为小数（如 100% 存储为 1.0）
+  - `fixedAmount`: 固定跟单金额（可选，USDC，仅在 copyMode="FIXED" 时生效，必须 >= 1）
+    - 说明：固定金额模式下，每次跟单的固定金额，不随 Leader 订单大小变化
+    - 限制：必须 >= 1 USDC
+    - 例如：设置为 10，则无论 Leader 买入多少，跟单金额始终为 10 USDC
+  - `maxOrderSize`: 单笔订单最大金额（可选，USDC，仅在 copyMode="RATIO" 时生效）
+    - 说明：比例模式下，限制单笔跟单订单的最大金额上限
+    - 作用：防止跟单金额过大，控制风险
+    - 例如：设置为 1000，即使计算出的跟单金额超过 1000，也会限制为 1000 USDC
+  - `minOrderSize`: 单笔订单最小金额（可选，USDC，仅在 copyMode="RATIO" 时生效，必须 >= 1）
+    - 说明：比例模式下，限制单笔跟单订单的最小金额下限
+    - 作用：过滤掉金额过小的订单，避免频繁小额交易
+    - 限制：如果填写，必须 >= 1 USDC
+    - 例如：设置为 10，如果计算出的跟单金额小于 10，则跳过该订单
+  - `maxDailyOrders`: 每日最大跟单订单数（可选，默认 100）
+    - 说明：限制每日最多跟单的订单数量，用于风险控制
+    - 作用：防止过度交易，控制每日交易频率
+    - 例如：设置为 50，当日跟单订单数达到 50 后，停止跟单，次日重置
+  - `priceTolerance`: 价格容忍度（可选，百分比，0-100，默认 5%）
+    - 说明：允许跟单价格在 Leader 价格基础上的调整范围
+    - 作用：在 Leader 价格 ± 容忍度范围内调整价格，提高成交率
+    - 例如：设置为 5%，Leader 价格为 0.5，则跟单价格可在 0.475-0.525 范围内
+  - `supportSell`: 跟单卖出（可选，默认 true）
+    - 说明：是否跟单 Leader 的卖出订单
+    - true: 跟单 Leader 的买入和卖出订单
+    - false: 只跟单 Leader 的买入订单，忽略卖出订单
+- **业务规则**：
+  - 模板名称必须唯一
+  - 模板创建后可以被多个钱包使用
+  - 修改模板会影响所有使用该模板的跟单
+  - **金额校验**（前后端都需要校验，校验失败时不允许创建/更新模板）：
+    - `minOrderSize` 必须 >= 1（仅在 copyMode="RATIO" 时生效，如果填写了该字段）
+      - 前端校验：表单提交前检查，如果填写了 `minOrderSize` 且值 < 1，显示错误提示并阻止提交
+      - 后端校验：接收请求时检查，如果 `minOrderSize` < 1，返回错误响应，不允许创建模板
+    - `fixedAmount` 必须 >= 1（仅在 copyMode="FIXED" 时生效，必填）
+      - 前端校验：表单提交前检查，如果 `fixedAmount` < 1，显示错误提示并阻止提交
+      - 后端校验：接收请求时检查，如果 `fixedAmount` < 1，返回错误响应，不允许创建模板
+  - **固定金额模式限制**：
+    - 固定金额模式下，不应用 `maxOrderSize` 和 `minOrderSize` 限制
+    - 固定金额模式下，跟单金额始终等于 `fixedAmount`
 
-#### 2.2.2 单个 Leader 的跟单配置
-- **功能**：为每个 Leader 设置独立的跟单参数
-- **配置项**：
-  - `leaderId`: 被跟单者ID
-  - `accountId`: 指定使用的账户ID（可选，不指定则使用默认账户）
-  - `copyMode`: 跟单金额模式（"RATIO" 或 "FIXED"，覆盖全局配置）
-  - `copyRatio`: 跟单比例（覆盖全局配置，仅在 copyMode="RATIO" 时生效）
-  - `fixedAmount`: 固定跟单金额（覆盖全局配置，仅在 copyMode="FIXED" 时生效）
-  - `maxOrderSize`: 单笔订单最大金额（覆盖全局配置）
-  - `minOrderSize`: 单笔订单最小金额（覆盖全局配置）
-  - `enabled`: 是否启用该 Leader 的跟单（覆盖全局配置）
-  - `category`: 分类筛选（sports/crypto）
+#### 2.3.3 更新模板
+- **功能**：修改现有模板的配置
+- **输入参数**：
+  - `templateId`: 模板ID（必需）
+  - `templateName`: 模板名称（可选，用于修改模板名称）
+  - 其他参数同创建模板（可选，只更新提供的字段）
+- **业务规则**：
+  - 可以修改模板名称，但新名称必须唯一，不能与其他模板重名
+  - 修改模板会影响所有使用该模板的跟单
+  - 建议在修改前提示用户影响范围
+  - **金额校验**（前后端都需要校验）：
+    - `minOrderSize` 必须 >= 1（仅在 copyMode="RATIO" 时生效）
+    - `fixedAmount` 必须 >= 1（仅在 copyMode="FIXED" 时生效）
+  - **固定金额模式限制**：
+    - 固定金额模式下，不应用 `maxOrderSize` 和 `minOrderSize` 限制
 
-### 2.4 订单同步与执行
+#### 2.3.4 删除模板
+- **功能**：删除模板
+- **输入参数**：
+  - `templateId`: 模板ID（必需）
+- **业务规则**：
+  - 删除前检查是否有跟单正在使用该模板
+  - 如果有跟单使用，提示用户先解除绑定或删除跟单
+  - 删除模板不会影响历史跟单记录
 
-#### 2.3.1 监控 Leader 交易
+#### 2.3.5 复制模板
+- **功能**：基于现有模板创建新模板
+- **输入参数**：
+  - `templateId`: 源模板ID（必需）
+  - `templateName`: 新模板名称（必需）
+  - 其他参数可选（覆盖源模板的配置）
+- **业务规则**：
+  - 新模板名称必须唯一
+  - 复制后可以独立修改，不影响源模板
+
+#### 2.3.6 查询模板列表
+- **功能**：获取所有模板列表
+- **返回数据**：
+  - 模板列表（每个模板包含）：
+    - 模板ID
+    - 模板名称
+    - 所有配置参数
+    - 使用该模板的跟单数量
+    - 创建时间
+    - 更新时间
+
+#### 2.3.7 查询模板详情
+- **功能**：获取指定模板的详细信息
+- **输入参数**：
+  - `templateId`: 模板ID（必需）
+- **返回数据**：
+  - 模板的所有配置参数
+  - 使用该模板的跟单列表
+
+### 2.4 跟单配置管理（钱包-模板关联）
+
+#### 2.4.1 创建跟单
+- **功能**：为钱包绑定模板，创建跟单关系
+- **输入参数**：
+  - `accountId`: 钱包账户ID（必需）
+  - `templateId`: 模板ID（必需）
+  - `leaderId`: Leader ID（必需，指定跟单哪个 Leader）
+  - `enabled`: 是否启用（默认 true）
+- **业务规则**：
+  - 一个钱包可以绑定多个模板（多对多关系）
+  - 一个模板可以被多个钱包使用
+  - 每个跟单关系对应一个 Leader
+  - 创建后默认启用状态
+
+#### 2.4.2 查询跟单列表
+- **功能**：查询所有跟单关系
+- **筛选条件**：
+  - `accountId`: 按钱包筛选（可选）
+  - `templateId`: 按模板筛选（可选）
+  - `leaderId`: 按 Leader 筛选（可选）
+  - `enabled`: 按启用状态筛选（可选）
+- **返回数据**：
+  - 跟单列表（每个跟单包含）：
+    - 跟单ID
+    - 钱包信息（账户ID、钱包地址、账户名称）
+    - 模板信息（模板ID、模板名称）
+    - Leader 信息（Leader ID、Leader 地址、Leader 名称）
+    - 启用状态
+    - 创建时间
+    - 更新时间
+
+#### 2.4.3 更新跟单状态
+- **功能**：开启或停止跟单
+- **输入参数**：
+  - `copyTradingId`: 跟单ID（必需）
+  - `enabled`: 启用状态（true/false）
+- **业务规则**：
+  - 停止跟单后，不再监控该 Leader 的交易
+  - 已创建的跟单订单不受影响
+  - 可以随时开启或停止
+
+#### 2.4.4 删除跟单
+- **功能**：删除跟单关系
+- **输入参数**：
+  - `copyTradingId`: 跟单ID（必需）
+- **业务规则**：
+  - 删除前自动停止跟单
+  - 删除后不再监控该 Leader 的交易
+  - 保留历史跟单记录
+
+#### 2.4.5 查询钱包绑定的模板
+- **功能**：查询指定钱包绑定的所有模板
+- **输入参数**：
+  - `accountId`: 钱包账户ID（必需）
+- **返回数据**：
+  - 模板列表（包含模板信息和对应的跟单状态）
+
+### 2.5 订单同步与执行
+
+#### 2.5.1 监控 Leader 交易
 - **功能**：实时监控 Leader 的交易活动
 - **实现方式**（优先级从高到低）：
   - **方式1（优先）**：使用 WebSocket 推送（RTDS API）
@@ -231,12 +378,13 @@
   - **方式2（备选）**：定期轮询 CLOB API
     - 当 WebSocket 不可用或不支持时，使用轮询方式
     - 调用 CLOB API `/trades?user={leaderAddress}` 获取最新交易
-    - 默认每 5 秒轮询一次（可配置轮询间隔）
+    - 使用系统默认的轮询间隔配置
 - **实现策略**：
   - 系统启动时尝试连接 WebSocket
   - 如果 WebSocket 连接成功且支持订阅用户交易，使用推送模式
   - 如果 WebSocket 不可用或不支持，自动降级到轮询模式
   - 支持运行时切换（WebSocket 断开时自动切换到轮询）
+  - 使用系统默认的 WebSocket 重连和轮询配置
 - **业务规则**：
   - 只监控已启用的 Leader
   - 根据分类筛选（如果设置了 category）
@@ -244,81 +392,75 @@
   - WebSocket 模式下，每个 Leader 需要单独订阅
   - 轮询模式下，批量查询多个 Leader 的交易
 
-#### 2.3.2 订单复制逻辑
+#### 2.5.2 订单复制逻辑
 - **触发条件**：
   - Leader 创建新订单（通过交易记录判断）
   - Leader 取消订单（需要监控订单状态变化）
 - **复制流程**：
   1. 检测到 Leader 的新交易
-  2. 验证跟单配置（是否启用、分类筛选、金额限制等）
-  3. 确定使用的账户：
-     - 如果 Leader 配置了指定账户，使用指定账户
-     - 否则使用默认账户
-  4. 计算跟单订单参数：
+  2. 查找所有启用状态的跟单关系（该 Leader 对应的跟单）
+  3. 对每个跟单关系：
+     a. 验证跟单状态（是否启用）
+     b. 获取模板配置
+     c. 验证风险控制（每日亏损、订单数限制等）
+     d. 确定使用的账户（跟单关系中的账户）
+     e. 计算跟单订单参数：
      - `market`: 与 Leader 相同
-     - `side`: 与 Leader 相同（BUY/SELL）
+        - `side`: 与 Leader 相同（BUY/SELL），如果模板不支持卖出且 Leader 是卖出，则跳过
      - `price`: 根据价格容忍度调整（可选）
-     - `size`: 根据跟单比例计算
-  5. 使用指定账户的 API Key 或私钥签名创建订单
-  6. 记录跟单记录（包含使用的账户ID）
+        - `size`: 根据模板配置计算（比例或固定金额）
+     f. 使用账户的 API Key 或私钥签名创建订单
+     g. 记录跟单记录（包含使用的账户ID、模板ID）
 
-#### 2.3.3 价格调整策略
+#### 2.5.3 价格调整策略
 - **固定价格**：完全复制 Leader 的价格
 - **市场价**：使用当前市场最优价格
 - **价格容忍度**：在 Leader 价格 ± 容忍度范围内调整
 - **默认策略**：固定价格（完全复制）
 
-#### 2.3.4 订单大小计算
-- **计算模式**：
+#### 2.5.4 订单大小计算
+- **计算模式**（基于模板配置）：
   - **比例模式（copyMode = "RATIO"）**：
     ```
-    跟单订单大小 = Leader 订单大小 × copyRatio
+    跟单订单大小 = Leader 订单大小 × (copyRatio / 100)
     ```
+    - 说明：`copyRatio` 为百分比值（如 100 表示 100%），需要除以 100 转换为小数进行计算
   - **固定金额模式（copyMode = "FIXED"）**：
     ```
     跟单订单大小 = fixedAmount（固定值，不随 Leader 订单大小变化）
     ```
-- **限制检查**：
-  - 不能超过 `maxOrderSize`
-  - 不能低于 `minOrderSize`
+- **限制检查**（仅在比例模式下生效）：
+  - 比例模式下，不能超过模板配置的 `maxOrderSize`
+  - 比例模式下，不能低于模板配置的 `minOrderSize`
   - 如果超出限制，调整到边界值
 - **业务规则**：
-  - 如果 Leader 配置了 `copyMode`，使用 Leader 的配置
-  - 否则使用全局配置的 `copyMode`
-  - 固定金额模式下，无论 Leader 订单大小如何，跟单金额都固定
-  - 比例模式下，跟单金额随 Leader 订单大小按比例变化
+  - 使用跟单关系绑定的模板配置
+  - **固定金额模式**：无论 Leader 订单大小如何，跟单金额都固定为 `fixedAmount`，不应用 `maxOrderSize` 和 `minOrderSize` 限制
+  - **比例模式**：跟单金额随 Leader 订单大小按比例变化，需要检查 `maxOrderSize` 和 `minOrderSize` 限制
 
-#### 2.3.5 订单取消同步
+#### 2.5.5 订单取消同步
 - **功能**：当 Leader 取消订单时，同步取消对应的跟单订单
 - **实现方式**：
   - 监控 Leader 的活跃订单列表
   - 检测到订单消失或状态变为 cancelled
   - 查找对应的跟单订单并取消
 
-### 2.4 风险控制
+### 2.6 风险控制
 
-#### 2.4.1 每日亏损限制
-- **功能**：当日累计亏损达到限制时，停止跟单
-- **计算方式**：
-  - 统计当日所有已平仓订单的盈亏
-  - 如果累计亏损 >= `maxDailyLoss`，暂停跟单
-- **恢复机制**：
-  - 次日自动恢复
-  - 或手动重置
-
-#### 2.4.2 每日订单数限制
+#### 2.6.1 每日订单数限制
 - **功能**：限制每日跟单订单数量
 - **规则**：
   - 当日跟单订单数 >= `maxDailyOrders` 时，停止跟单
   - 次日自动重置
 
-#### 2.4.3 单笔订单金额限制
-- **功能**：限制单笔跟单订单的最大和最小金额
+#### 2.6.2 单笔订单金额限制（仅比例模式）
+- **功能**：限制单笔跟单订单的最大和最小金额（仅在比例模式下生效）
 - **规则**：
-  - 订单金额必须在 `minOrderSize` 和 `maxOrderSize` 之间
+  - 比例模式下，订单金额必须在 `minOrderSize`（>= 1）和 `maxOrderSize` 之间
+  - 固定金额模式下，不应用此限制
   - 超出范围时，调整到边界值或跳过
 
-#### 2.4.4 市场状态检查
+#### 2.6.3 市场状态检查
 - **功能**：在跟单前检查市场状态
 - **检查项**：
   - 市场是否活跃（active）
@@ -484,29 +626,8 @@ data class Leader(
     @Column(name = "leader_name", length = 100)
     val leaderName: String? = null,
     
-    @Column(name = "account_id")
-    val accountId: Long? = null,  // 指定使用的账户ID（null 表示使用默认账户）
-    
     @Column(name = "category", length = 20)
     val category: String? = null,  // sports 或 crypto，null 表示不筛选
-    
-    @Column(name = "enabled", nullable = false)
-    val enabled: Boolean = true,
-    
-    @Column(name = "copy_mode", length = 10)
-    val copyMode: String? = null,  // "RATIO" 或 "FIXED"，null 表示使用全局配置
-    
-    @Column(name = "copy_ratio", nullable = false, precision = 10, scale = 2)
-    val copyRatio: BigDecimal = BigDecimal.ONE,  // 跟单比例（仅在 copyMode="RATIO" 时生效）
-    
-    @Column(name = "fixed_amount", precision = 20, scale = 8)
-    val fixedAmount: BigDecimal? = null,  // 固定跟单金额（仅在 copyMode="FIXED" 时生效）
-    
-    @Column(name = "max_order_size", precision = 20, scale = 8)
-    val maxOrderSize: BigDecimal? = null,  // 单笔最大金额
-    
-    @Column(name = "min_order_size", precision = 20, scale = 8)
-    val minOrderSize: BigDecimal? = null,  // 单笔最小金额
     
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
@@ -516,14 +637,17 @@ data class Leader(
 )
 ```
 
-### 4.2 CopyTradingConfig（全局跟单配置）
+### 4.2 CopyTradingTemplate（跟单模板）
 ```kotlin
 @Entity
-@Table(name = "copy_trading_config")
-data class CopyTradingConfig(
+@Table(name = "copy_trading_templates")
+data class CopyTradingTemplate(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
+    
+    @Column(name = "template_name", unique = true, nullable = false, length = 100)
+    val templateName: String,  // 模板名称
     
     @Column(name = "copy_mode", nullable = false, length = 10)
     val copyMode: String = "RATIO",  // "RATIO" 或 "FIXED"
@@ -532,16 +656,13 @@ data class CopyTradingConfig(
     val copyRatio: BigDecimal = BigDecimal.ONE,  // 仅在 copyMode="RATIO" 时生效
     
     @Column(name = "fixed_amount", precision = 20, scale = 8)
-    val fixedAmount: BigDecimal? = null,  // 仅在 copyMode="FIXED" 时生效
+    val fixedAmount: BigDecimal? = null,  // 仅在 copyMode="FIXED" 时生效，必须 >= 1
     
-    @Column(name = "max_order_size", nullable = false, precision = 20, scale = 8)
-    val maxOrderSize: BigDecimal = "1000".toSafeBigDecimal(),
+    @Column(name = "max_order_size", precision = 20, scale = 8)
+    val maxOrderSize: BigDecimal? = null,  // 仅在 copyMode="RATIO" 时生效
     
-    @Column(name = "min_order_size", nullable = false, precision = 20, scale = 8)
-    val minOrderSize: BigDecimal = "1".toSafeBigDecimal(),
-    
-    @Column(name = "max_daily_loss", nullable = false, precision = 20, scale = 8)
-    val maxDailyLoss: BigDecimal = "10000".toSafeBigDecimal(),
+    @Column(name = "min_order_size", precision = 20, scale = 8)
+    val minOrderSize: BigDecimal? = null,  // 仅在 copyMode="RATIO" 时生效，必须 >= 1
     
     @Column(name = "max_daily_orders", nullable = false)
     val maxDailyOrders: Int = 100,
@@ -549,30 +670,50 @@ data class CopyTradingConfig(
     @Column(name = "price_tolerance", nullable = false, precision = 5, scale = 2)
     val priceTolerance: BigDecimal = "5".toSafeBigDecimal(),  // 百分比
     
-    @Column(name = "delay_seconds", nullable = false)
-    val delaySeconds: Int = 0,
+    @Column(name = "support_sell", nullable = false)
+    val supportSell: Boolean = true,  // 跟单卖出
     
-    @Column(name = "poll_interval_seconds", nullable = false)
-    val pollIntervalSeconds: Int = 5,  // 轮询间隔（仅在 WebSocket 不可用时使用）
-    
-    @Column(name = "use_websocket", nullable = false)
-    val useWebSocket: Boolean = true,  // 是否优先使用 WebSocket 推送
-    
-    @Column(name = "websocket_reconnect_interval", nullable = false)
-    val websocketReconnectInterval: Int = 5000,  // WebSocket 重连间隔（毫秒）
-    
-    @Column(name = "websocket_max_retries", nullable = false)
-    val websocketMaxRetries: Int = 10,  // WebSocket 最大重试次数
-    
-    @Column(name = "enabled", nullable = false)
-    val enabled: Boolean = true,
+    @Column(name = "created_at", nullable = false)
+    val createdAt: Long = System.currentTimeMillis(),
     
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Long = System.currentTimeMillis()
 )
 ```
 
-### 4.3 CopyOrder（跟单订单）
+### 4.3 CopyTrading（跟单关系，钱包-模板关联）
+```kotlin
+@Entity
+@Table(name = "copy_trading")
+data class CopyTrading(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Long? = null,
+    
+    @Column(name = "account_id", nullable = false)
+    val accountId: Long,  // 钱包账户ID
+    
+    @Column(name = "template_id", nullable = false)
+    val templateId: Long,  // 模板ID
+    
+    @Column(name = "leader_id", nullable = false)
+    val leaderId: Long,  // Leader ID
+    
+    @Column(name = "enabled", nullable = false)
+    val enabled: Boolean = true,  // 是否启用
+    
+    @Column(name = "created_at", nullable = false)
+    val createdAt: Long = System.currentTimeMillis(),
+    
+    @Column(name = "updated_at", nullable = false)
+    var updatedAt: Long = System.currentTimeMillis(),
+    
+    // 唯一约束：同一个钱包、模板、Leader 的组合只能有一条记录
+    @UniqueConstraint(columnNames = ["account_id", "template_id", "leader_id"])
+)
+```
+
+### 4.4 CopyOrder（跟单订单）
 ```kotlin
 @Entity
 @Table(name = "copy_orders")
@@ -583,6 +724,12 @@ data class CopyOrder(
     
     @Column(name = "account_id", nullable = false)
     val accountId: Long,  // 使用的账户ID
+    
+    @Column(name = "template_id", nullable = false)
+    val templateId: Long,  // 使用的模板ID
+    
+    @Column(name = "copy_trading_id", nullable = false)
+    val copyTradingId: Long,  // 跟单关系ID
     
     @Column(name = "leader_id", nullable = false)
     val leaderId: Long,
@@ -634,7 +781,7 @@ data class CopyOrder(
 )
 ```
 
-### 4.4 DailyStatistics（每日统计）
+### 4.5 DailyStatistics（每日统计）
 ```kotlin
 @Entity
 @Table(name = "copy_trading_daily_stats")
@@ -831,9 +978,7 @@ data class DailyStatistics(
 {
   "leaderAddress": "0x...",
   "leaderName": "Trader A",
-  "accountId": 1,
-  "category": "sports",
-  "enabled": true
+  "category": "sports"
 }
 ```
 - **响应**:
@@ -844,15 +989,16 @@ data class DailyStatistics(
     "id": 1,
     "leaderAddress": "0x...",
     "leaderName": "Trader A",
-    "accountId": 1,
     "category": "sports",
-    "enabled": true
+    "createdAt": 1234567890000,
+    "updatedAt": 1234567890000
   },
   "msg": ""
 }
 ```
 - **说明**：
-  - `accountId`: 可选，指定使用哪个账户跟单该 Leader，不提供则使用默认账户
+  - 账户和模板的关联通过跟单管理接口创建
+  - 启用状态由跟单关系管理
 
 #### 5.2.2 删除被跟单者
 - **接口**: `POST /api/copy-trading/leaders/delete`
@@ -870,22 +1016,18 @@ data class DailyStatistics(
 {
   "leaderId": 1,
   "leaderName": "Trader A Updated",
-  "accountId": 2,
-  "category": "crypto",
-  "enabled": false,
-  "copyRatio": "2.0",
-  "maxOrderSize": "500"
+  "category": "crypto"
 }
 ```
 - **说明**：
-  - `accountId`: 可选，更新该 Leader 使用的账户
+  - 只能更新名称和分类
+  - 账户和模板关联通过跟单管理接口管理
 
 #### 5.2.4 查询被跟单者列表
 - **接口**: `POST /api/copy-trading/leaders/list`
 - **请求体**:
 ```json
 {
-  "enabled": true,
   "category": "sports"
 }
 ```
@@ -900,10 +1042,11 @@ data class DailyStatistics(
         "leaderAddress": "0x...",
         "leaderName": "Trader A",
         "category": "sports",
-        "enabled": true,
-        "copyRatio": "1.0",
+        "copyTradingCount": 3,
         "totalOrders": 10,
-        "totalPnl": "50.5"
+        "totalPnl": "50.5",
+        "createdAt": 1234567890000,
+        "updatedAt": 1234567890000
       }
     ],
     "total": 1
@@ -912,72 +1055,229 @@ data class DailyStatistics(
 }
 ```
 
-### 5.3 配置管理接口
+### 5.3 跟单模板管理接口（子菜单：跟单模板）
 
-#### 5.3.1 获取全局配置
-- **接口**: `POST /api/copy-trading/config/get`
+#### 5.3.1 创建模板
+- **接口**: `POST /api/copy-trading/templates/create`
+- **请求体**:
+```json
+{
+  "templateName": "保守型模板",
+  "copyMode": "RATIO",
+  "copyRatio": "0.5",  // 后端存储为小数（前端输入 50% 转换为 0.5）
+  "fixedAmount": null,
+  "maxOrderSize": "1000",
+  "minOrderSize": "1",
+  "maxDailyOrders": 100,
+  "priceTolerance": "5",
+  "supportSell": true
+}
+```
 - **响应**:
 ```json
 {
   "code": 0,
   "data": {
+    "id": 1,
+    "templateName": "保守型模板",
     "copyMode": "RATIO",
-    "copyRatio": "1.0",
+    "copyRatio": "0.5",  // 后端存储为小数（50% 存储为 0.5）
     "fixedAmount": null,
     "maxOrderSize": "1000",
     "minOrderSize": "1",
-    "maxDailyLoss": "10000",
     "maxDailyOrders": 100,
     "priceTolerance": "5",
-    "delaySeconds": 0,
-    "pollIntervalSeconds": 5,
-    "useWebSocket": true,
-    "websocketReconnectInterval": 5000,
-    "websocketMaxRetries": 10,
-    "enabled": true
+    "supportSell": true,
+    "createdAt": 1234567890000,
+    "updatedAt": 1234567890000
   },
   "msg": ""
 }
 ```
 
-#### 5.3.2 更新全局配置
-- **接口**: `POST /api/copy-trading/config/update`
-- **请求体**（比例模式示例）:
+#### 5.3.2 更新模板
+- **接口**: `POST /api/copy-trading/templates/update`
+- **请求体**:
 ```json
 {
+  "templateId": 1,
+  "templateName": "新模板名称",  // 可选，用于修改模板名称
+  "copyRatio": "0.6",  // 后端存储为小数（前端输入 60% 转换为 0.6 存储）
+  "maxOrderSize": "2000"
+}
+```
+- **注意**：可以修改模板名称，但新名称必须唯一，不能与其他模板重名
+
+#### 5.3.3 删除模板
+- **接口**: `POST /api/copy-trading/templates/delete`
+- **请求体**:
+```json
+{
+  "templateId": 1
+}
+```
+
+#### 5.3.4 复制模板
+- **接口**: `POST /api/copy-trading/templates/copy`
+- **请求体**:
+```json
+{
+  "templateId": 1,
+  "templateName": "保守型模板-副本",
+  "copyRatio": "0.7"  // 后端存储为小数（前端输入 70% 转换为 0.7 存储）
+}
+```
+
+#### 5.3.5 查询模板列表
+- **接口**: `POST /api/copy-trading/templates/list`
+- **响应**:
+```json
+{
+  "code": 0,
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "templateName": "保守型模板",
   "copyMode": "RATIO",
-  "copyRatio": "1.5",
-  "fixedAmount": null,
-  "maxOrderSize": "2000",
-  "minOrderSize": "5",
-  "maxDailyLoss": "20000",
-  "maxDailyOrders": 200,
-  "priceTolerance": "3",
-  "delaySeconds": 2,
-  "pollIntervalSeconds": 3,
-  "useWebSocket": true,
-  "websocketReconnectInterval": 5000,
-  "websocketMaxRetries": 10,
+        "copyRatio": "0.5",  // 后端存储为小数（前端显示为 50%）  // 后端存储为小数（50% 存储为 0.5）
+        "useCount": 3,
+        "createdAt": 1234567890000,
+        "updatedAt": 1234567890000
+      }
+    ],
+    "total": 1
+  },
+  "msg": ""
+}
+```
+
+#### 5.3.6 查询模板详情
+- **接口**: `POST /api/copy-trading/templates/detail`
+- **请求体**:
+```json
+{
+  "templateId": 1
+}
+```
+
+### 5.4 跟单配置管理接口（子菜单：跟单配置）
+
+#### 5.4.1 创建跟单
+- **接口**: `POST /api/copy-trading/create`
+- **请求体**:
+```json
+{
+  "accountId": 1,
+  "templateId": 1,
+  "leaderId": 1,
   "enabled": true
 }
 ```
-- **请求体**（固定金额模式示例）:
+- **响应**:
 ```json
 {
-  "copyMode": "FIXED",
-  "copyRatio": null,
-  "fixedAmount": "100",
-  "maxOrderSize": "2000",
-  "minOrderSize": "5",
-  "maxDailyLoss": "20000",
-  "maxDailyOrders": 200,
-  "priceTolerance": "3",
-  "delaySeconds": 2,
-  "pollIntervalSeconds": 3,
-  "useWebSocket": true,
-  "websocketReconnectInterval": 5000,
-  "websocketMaxRetries": 10,
+  "code": 0,
+  "data": {
+    "id": 1,
+    "accountId": 1,
+    "accountName": "Account 1",
+    "walletAddress": "0x1234...5678",
+    "templateId": 1,
+    "templateName": "保守型模板",
+    "leaderId": 1,
+    "leaderName": "Trader A",
+    "leaderAddress": "0x...",
+    "enabled": true,
+    "createdAt": 1234567890000
+  },
+  "msg": ""
+}
+```
+
+#### 5.4.2 查询跟单列表
+- **接口**: `POST /api/copy-trading/list`
+- **请求体**:
+```json
+{
+  "accountId": 1,
+  "templateId": 1,
+  "leaderId": 1,
   "enabled": true
+}
+```
+- **响应**:
+```json
+{
+  "code": 0,
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "accountId": 1,
+        "accountName": "Account 1",
+        "walletAddress": "0x1234...5678",
+        "templateId": 1,
+        "templateName": "保守型模板",
+        "leaderId": 1,
+        "leaderName": "Trader A",
+        "leaderAddress": "0x...",
+        "enabled": true,
+        "createdAt": 1234567890000,
+        "updatedAt": 1234567890000
+      }
+    ],
+    "total": 1
+  },
+  "msg": ""
+}
+```
+
+#### 5.4.3 更新跟单状态
+- **接口**: `POST /api/copy-trading/update-status`
+- **请求体**:
+```json
+{
+  "copyTradingId": 1,
+  "enabled": false
+}
+```
+
+#### 5.4.4 删除跟单
+- **接口**: `POST /api/copy-trading/delete`
+- **请求体**:
+```json
+{
+  "copyTradingId": 1
+}
+```
+
+#### 5.4.5 查询钱包绑定的模板
+- **接口**: `POST /api/copy-trading/account-templates`
+- **请求体**:
+```json
+{
+  "accountId": 1
+}
+```
+- **响应**:
+```json
+{
+  "code": 0,
+  "data": {
+    "list": [
+      {
+        "templateId": 1,
+        "templateName": "保守型模板",
+        "copyTradingId": 1,
+        "leaderId": 1,
+        "leaderName": "Trader A",
+        "enabled": true
+      }
+    ],
+    "total": 1
+  },
+  "msg": ""
 }
 ```
 
@@ -1285,9 +1585,7 @@ const address = account.address;
   - 系统启动时优先尝试 WebSocket 连接
   - WebSocket 连接成功且可用时，使用推送模式
   - WebSocket 不可用或断开时，自动切换到轮询模式
-- **配置控制**：
-  - 支持配置强制使用轮询模式（用于调试或测试）
-  - 支持配置 WebSocket 重连间隔和最大重试次数
+  - 使用系统默认的 WebSocket 重连和轮询配置
 
 #### 6.2.4 去重机制
 - **实现方式**：
@@ -1325,15 +1623,23 @@ const address = account.address;
 ## 7. 数据库设计
 
 ### 7.1 表结构
+- `copy_trading_accounts`: 账户信息表
 - `copy_trading_leaders`: 被跟单者表
-- `copy_trading_config`: 全局配置表（单条记录）
+- `copy_trading_templates`: 跟单模板表
+- `copy_trading`: 跟单关系表（钱包-模板关联，多对多）
 - `copy_orders`: 跟单订单表
 - `copy_trading_daily_stats`: 每日统计表
 - `copy_trading_processed_trades`: 已处理交易表（用于去重）
-- `copy_trading_account`: 账户信息表（单条记录）
 
 ### 7.2 索引设计
+- `copy_trading_accounts.wallet_address`: UNIQUE 索引
 - `copy_trading_leaders.leader_address`: UNIQUE 索引
+- `copy_trading_templates.template_name`: UNIQUE 索引
+- `copy_trading.account_id + template_id + leader_id`: 联合唯一索引
+- `copy_trading.account_id`: 索引
+- `copy_trading.template_id`: 索引
+- `copy_trading.leader_id`: 索引
+- `copy_orders.copy_trading_id`: 索引
 - `copy_orders.leader_id`: 索引
 - `copy_orders.market_id`: 索引
 - `copy_orders.created_at`: 索引
@@ -1381,7 +1687,6 @@ const address = account.address;
 - 智能跟单（根据 Leader 历史表现筛选）
 - 反向跟单（反向操作 Leader 的订单）
 - 部分跟单（只跟单特定市场或条件）
-- 跟单延迟策略（延迟 N 秒后跟单）
 
 ### 9.2 分析功能
 - Leader 表现分析
@@ -1403,10 +1708,18 @@ const address = account.address;
    - 账户信息查询
    - API Key 管理（可选）
 2. Leader 管理（增删改查）
-3. 全局配置管理
-4. 订单监控和同步（基础版本）
-5. 跟单订单记录（包含账户ID）
-6. **前端移动端适配**（必须）
+3. **跟单模板管理**（新增）
+   - 创建、更新、删除、复制模板
+   - 查询模板列表和详情
+4. **跟单管理**（新增）
+   - 创建跟单（钱包-模板关联）
+   - 查询跟单列表
+   - 开启/停止跟单
+   - 删除跟单
+   - 查询钱包绑定的模板
+5. 订单监控和同步（基础版本）
+6. 跟单订单记录（包含账户ID、模板ID）
+7. **前端移动端适配**（必须）
    - 响应式布局设计
    - 移动端 UI 组件适配
    - 触摸操作优化

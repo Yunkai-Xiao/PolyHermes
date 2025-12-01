@@ -60,12 +60,12 @@ export interface Leader {
   id: number
   leaderAddress: string
   leaderName?: string
-  accountId?: number
   category?: string
-  enabled: boolean
-  copyRatio: string
+  copyTradingCount: number
   totalOrders?: number
   totalPnl?: string
+  createdAt: number
+  updatedAt: number
 }
 
 /**
@@ -82,29 +82,147 @@ export interface LeaderListResponse {
 export interface LeaderAddRequest {
   leaderAddress: string
   leaderName?: string
-  accountId?: number
   category?: string
+}
+
+/**
+ * Leader 更新请求
+ */
+export interface LeaderUpdateRequest {
+  leaderId: number
+  leaderName?: string
+  category?: string
+}
+
+/**
+ * 跟单模板
+ */
+export interface CopyTradingTemplate {
+  id: number
+  templateName: string
+  copyMode: 'RATIO' | 'FIXED'
+  copyRatio: string
+  fixedAmount?: string
+  maxOrderSize?: string
+  minOrderSize?: string
+  maxDailyOrders: number
+  priceTolerance: string
+  supportSell: boolean
+  useCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * 模板列表响应
+ */
+export interface TemplateListResponse {
+  list: CopyTradingTemplate[]
+  total: number
+}
+
+/**
+ * 模板创建请求
+ */
+export interface TemplateCreateRequest {
+  templateName: string
+  copyMode?: 'RATIO' | 'FIXED'
+  copyRatio?: string
+  fixedAmount?: string
+  maxOrderSize?: string
+  minOrderSize?: string
+  maxDailyOrders?: number
+  priceTolerance?: string
+  supportSell?: boolean
+}
+
+/**
+ * 模板更新请求
+ */
+export interface TemplateUpdateRequest {
+  templateId: number
+  templateName?: string
+  copyMode?: 'RATIO' | 'FIXED'
+  copyRatio?: string
+  fixedAmount?: string
+  maxOrderSize?: string
+  minOrderSize?: string
+  maxDailyOrders?: number
+  priceTolerance?: string
+  supportSell?: boolean
+}
+
+/**
+ * 模板复制请求
+ */
+export interface TemplateCopyRequest {
+  templateId: number
+  templateName: string
+  copyMode?: 'RATIO' | 'FIXED'
+  copyRatio?: string
+  fixedAmount?: string
+  maxOrderSize?: string
+  minOrderSize?: string
+  maxDailyOrders?: number
+  priceTolerance?: string
+  supportSell?: boolean
+}
+
+/**
+ * 跟单关系（钱包-模板关联）
+ */
+export interface CopyTrading {
+  id: number
+  accountId: number
+  accountName?: string
+  walletAddress: string
+  templateId: number
+  templateName: string
+  leaderId: number
+  leaderName?: string
+  leaderAddress: string
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * 跟单列表响应
+ */
+export interface CopyTradingListResponse {
+  list: CopyTrading[]
+  total: number
+}
+
+/**
+ * 跟单创建请求
+ */
+export interface CopyTradingCreateRequest {
+  accountId: number
+  templateId: number
+  leaderId: number
   enabled?: boolean
 }
 
 /**
- * 跟单配置
+ * 钱包绑定的模板信息
  */
-export interface CopyTradingConfig {
-  copyMode: 'RATIO' | 'FIXED'
-  copyRatio: string
-  fixedAmount?: string
-  maxOrderSize: string
-  minOrderSize: string
-  maxDailyLoss: string
-  maxDailyOrders: number
-  priceTolerance: string
-  delaySeconds: number
-  pollIntervalSeconds: number
-  useWebSocket: boolean
-  websocketReconnectInterval: number
-  websocketMaxRetries: number
+export interface AccountTemplate {
+  templateId: number
+  templateName: string
+  copyTradingId: number
+  leaderId: number
+  leaderName?: string
+  leaderAddress: string
   enabled: boolean
+}
+
+/**
+ * 钱包绑定的模板列表响应
+ */
+export interface AccountTemplatesResponse {
+  list: AccountTemplate[]
+  total: number
 }
 
 /**
@@ -113,6 +231,8 @@ export interface CopyTradingConfig {
 export interface CopyOrder {
   id: number
   accountId: number
+  templateId: number
+  copyTradingId: number
   leaderId: number
   leaderAddress: string
   leaderName?: string
