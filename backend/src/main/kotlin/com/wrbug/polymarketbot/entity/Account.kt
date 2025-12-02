@@ -14,7 +14,7 @@ data class Account(
     val id: Long? = null,
     
     @Column(name = "private_key", nullable = false, length = 500)
-    val privateKey: String,  // 私钥（明文存储）
+    val privateKey: String,  // 私钥（AES 加密存储）
     
     @Column(name = "wallet_address", unique = true, nullable = false, length = 42)
     val walletAddress: String,  // 钱包地址（从私钥推导）

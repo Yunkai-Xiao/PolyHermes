@@ -25,7 +25,8 @@ class AccountService(
     private val blockchainService: BlockchainService,
     private val apiKeyService: PolymarketApiKeyService,
     private val orderPushService: OrderPushService,
-    private val orderSigningService: OrderSigningService
+    private val orderSigningService: OrderSigningService,
+    private val cryptoUtils: com.wrbug.polymarketbot.util.CryptoUtils
 ) {
 
     private val logger = LoggerFactory.getLogger(AccountService::class.java)
@@ -108,9 +109,12 @@ class AccountService(
                 }
             }
 
-            // 7. 创建账户
+            // 7. 加密私钥
+            val encryptedPrivateKey = cryptoUtils.encrypt(request.privateKey)
+            
+            // 8. 创建账户
             val account = Account(
-                privateKey = request.privateKey,
+                privateKey = encryptedPrivateKey,  // 存储加密后的私钥
                 walletAddress = request.walletAddress,
                 proxyAddress = proxyAddress,
                 apiKey = apiKeyCreds.apiKey,
@@ -569,6 +573,26 @@ class AccountService(
         val cleanKey = if (privateKey.startsWith("0x")) privateKey.substring(2) else privateKey
         return cleanKey.length == 64 && cleanKey.matches(Regex("^[0-9a-fA-F]{64}$"))
     }
+    
+    /**
+     * 解密账户私钥
+     * 支持向后兼容：如果私钥未加密（明文），直接返回
+     */
+    fun decryptPrivateKey(account: Account): String {
+        return try {
+            // 尝试解密（如果已加密）
+            if (cryptoUtils.isEncrypted(account.privateKey)) {
+                cryptoUtils.decrypt(account.privateKey)
+            } else {
+                // 向后兼容：如果私钥未加密（可能是旧数据），直接返回
+                logger.warn("账户 ${account.id} 的私钥未加密，建议重新导入账户以加密私钥")
+                account.privateKey
+            }
+        } catch (e: Exception) {
+            logger.error("解密私钥失败: accountId=${account.id}", e)
+            throw RuntimeException("解密私钥失败: ${e.message}", e)
+        }
+    }
 
     /**
      * 查询所有账户的仓位列表
@@ -764,10 +788,13 @@ class AccountService(
             // 只有 GTD 订单才需要设置具体的过期时间
             val expiration = "0"
             
-            // 7. 创建并签名订单
+            // 7. 解密私钥
+            val decryptedPrivateKey = decryptPrivateKey(account)
+            
+            // 8. 创建并签名订单
             val signedOrder = try {
                 orderSigningService.createAndSignOrder(
-                    privateKey = account.privateKey,
+                    privateKey = decryptedPrivateKey,
                     makerAddress = account.proxyAddress,  // 使用代理地址作为 maker
                     tokenId = tokenId,
                     side = "SELL",
@@ -1047,9 +1074,12 @@ class AccountService(
                 for ((marketId, marketPositions) in positionsByMarket) {
                     val indexSets = marketPositions.map { it.second }
                     
+                    // 解密私钥
+                    val decryptedPrivateKey = decryptPrivateKey(account)
+                    
                     // 调用区块链服务赎回仓位
                     val redeemResult = blockchainService.redeemPositions(
-                        privateKey = account.privateKey,
+                        privateKey = decryptedPrivateKey,
                         proxyAddress = account.proxyAddress,
                         conditionId = marketId,
                         indexSets = indexSets

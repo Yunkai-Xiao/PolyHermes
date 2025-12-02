@@ -19,7 +19,7 @@ trap cleanup SIGTERM SIGINT
 
 # 启动后端服务（以 appuser 用户运行，后台运行）
 echo "启动后端服务..."
-su appuser -c "cd /app && java -jar /app/app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod}" &
+java -jar /app/app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod} &
 BACKEND_PID=$!
 
 # 等待后端服务启动

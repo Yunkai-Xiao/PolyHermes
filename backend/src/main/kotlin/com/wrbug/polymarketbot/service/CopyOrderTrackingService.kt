@@ -33,10 +33,31 @@ class CopyOrderTrackingService(
     private val leaderRepository: LeaderRepository,
     private val orderSigningService: OrderSigningService,
     private val blockchainService: BlockchainService,
-    private val retrofitFactory: RetrofitFactory
+    private val retrofitFactory: RetrofitFactory,
+    private val cryptoUtils: com.wrbug.polymarketbot.util.CryptoUtils
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyOrderTrackingService::class.java)
+    
+    /**
+     * 解密账户私钥
+     * 支持向后兼容：如果私钥未加密（明文），直接返回
+     */
+    private fun decryptPrivateKey(account: Account): String {
+        return try {
+            // 尝试解密（如果已加密）
+            if (cryptoUtils.isEncrypted(account.privateKey)) {
+                cryptoUtils.decrypt(account.privateKey)
+            } else {
+                // 向后兼容：如果私钥未加密（可能是旧数据），直接返回
+                logger.warn("账户 ${account.id} 的私钥未加密，建议重新导入账户以加密私钥")
+                account.privateKey
+            }
+        } catch (e: Exception) {
+            logger.error("解密私钥失败: accountId=${account.id}", e)
+            throw RuntimeException("解密私钥失败: ${e.message}", e)
+        }
+    }
     
     /**
      * 处理交易事件（WebSocket 或轮询）
@@ -214,10 +235,13 @@ class CopyOrderTrackingService(
                         account.walletAddress
                     )
                     
+                    // 解密私钥
+                    val decryptedPrivateKey = decryptPrivateKey(account)
+                    
                     // 调用API创建订单（带重试机制，重试时会重新生成salt并重新签名）
                     val createOrderResult = createOrderWithRetry(
                         clobApi = clobApi,
-                        privateKey = account.privateKey,
+                        privateKey = decryptedPrivateKey,
                         makerAddress = account.proxyAddress,
                         tokenId = tokenId,
                         side = "BUY",
@@ -442,9 +466,12 @@ class CopyOrderTrackingService(
         val sellPrice = calculateAdjustedPrice(leaderSellTrade.price.toSafeBigDecimal(), template, isBuy = false)
         
         // 7. 创建并签名卖出订单
+        // 解密私钥
+        val decryptedPrivateKey = decryptPrivateKey(account)
+        
         val signedOrder = try {
             orderSigningService.createAndSignOrder(
-                privateKey = account.privateKey,
+                privateKey = decryptedPrivateKey,
                 makerAddress = account.proxyAddress,
                 tokenId = tokenId,
                 side = "SELL",
@@ -479,9 +506,12 @@ class CopyOrderTrackingService(
         )
         
         // 10. 调用API创建卖出订单（带重试机制，重试时会重新生成salt并重新签名）
+        // 解密私钥
+        val decryptedPrivateKey = decryptPrivateKey(account)
+        
         val createOrderResult = createOrderWithRetry(
             clobApi = clobApi,
-            privateKey = account.privateKey,
+            privateKey = decryptedPrivateKey,
             makerAddress = account.proxyAddress,
             tokenId = tokenId,
             side = "SELL",
