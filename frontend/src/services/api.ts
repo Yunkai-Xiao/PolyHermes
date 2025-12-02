@@ -5,9 +5,22 @@ import { wsManager } from './websocket'
 
 /**
  * API 基础配置
+ * 支持通过环境变量 VITE_API_URL 配置后端地址
+ * 默认使用相对路径 /api（适用于同域部署）
+ * 如果设置了 VITE_API_URL，则使用完整 URL
  */
+const getBaseURL = (): string => {
+  const envApiUrl = import.meta.env.VITE_API_URL
+  if (envApiUrl) {
+    // 如果设置了环境变量，使用完整 URL
+    return `${envApiUrl}/api`
+  }
+  // 否则使用相对路径（适用于开发环境代理或同域部署）
+  return '/api'
+}
+
 const apiClient: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'

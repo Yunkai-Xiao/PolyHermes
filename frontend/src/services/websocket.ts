@@ -325,16 +325,28 @@ class WebSocketManager {
   
   /**
    * 获取 WebSocket URL（带token认证）
+   * 支持通过环境变量 VITE_WS_URL 配置 WebSocket 地址
    */
   private getWebSocketUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    const envWsUrl = import.meta.env.VITE_WS_URL
+    let wsBaseUrl: string
+    
+    if (envWsUrl) {
+      // 如果设置了环境变量，使用完整 URL
+      wsBaseUrl = envWsUrl
+    } else {
+      // 否则使用相对路径（适用于开发环境代理或同域部署）
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = window.location.host
+      wsBaseUrl = `${protocol}//${host}`
+    }
+    
     const token = this.getToken()
     if (token) {
       // 通过查询参数传递token
-      return `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
+      return `${wsBaseUrl}/ws?token=${encodeURIComponent(token)}`
     }
-    return `${protocol}//${host}/ws`
+    return `${wsBaseUrl}/ws`
   }
   
   /**

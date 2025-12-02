@@ -80,9 +80,9 @@ polymarket-bot/
 - JDK 17+
 - Node.js 18+
 - MySQL 8.0+
-- Gradle 7.5+
+- Gradle 7.5+（或使用 Gradle Wrapper）
 
-### 安装步骤
+### 开发环境
 
 1. **克隆仓库**
 
@@ -99,33 +99,16 @@ cd PolyHermes
 CREATE DATABASE polymarket_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-3. **配置后端**
-
-编辑 `backend/src/main/resources/application.properties`：
-
-```properties
-# 数据库配置
-spring.datasource.url=jdbc:mysql://localhost:3306/polymarket_bot?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
-spring.datasource.username=${DB_USERNAME:root}
-spring.datasource.password=${DB_PASSWORD:your_password}
-
-# 服务器端口
-server.port=${SERVER_PORT:8000}
-
-# Polygon RPC（用于查询链上余额）
-polygon.rpc.url=${POLYGON_RPC_URL:https://polygon-rpc.com}
-```
-
-4. **启动后端**
+3. **启动后端**
 
 ```bash
 cd backend
 ./gradlew bootRun
 ```
 
-后端服务将在 `http://localhost:8000` 启动。
+后端服务将在 `http://localhost:8000` 启动（开发环境）。
 
-5. **启动前端**
+4. **启动前端**
 
 ```bash
 cd frontend
@@ -134,6 +117,34 @@ npm run dev
 ```
 
 前端应用将在 `http://localhost:3000` 启动。
+
+### 生产部署
+
+详细的部署文档请参考：[部署文档](docs/DEPLOYMENT.md)
+
+#### 快速部署
+
+**后端（Java 方式）**:
+```bash
+cd backend
+./deploy.sh java
+```
+
+**后端（Docker 方式）**:
+```bash
+cd backend
+./deploy.sh docker
+```
+
+**前端**:
+```bash
+cd frontend
+# 使用默认后端地址
+./build.sh
+
+# 或指定自定义后端地址
+./build.sh --api-url http://your-backend-server.com:8000
+```
 
 ## 📖 使用指南
 
@@ -180,11 +191,11 @@ npm run dev
 3. 启用代理并测试连接
 4. 配置实时生效，无需重启服务
 
-## 📚 API 文档
+## 📚 文档
 
-详细的 API 文档请参考：
-- [跟单系统需求文档](docs/copy-trading-requirements.md)
-- [前端需求文档](docs/copy-trading-frontend-requirements.md)
+- [部署文档](docs/DEPLOYMENT.md) - 详细的部署指南（Java/Docker）
+- [跟单系统需求文档](docs/copy-trading-requirements.md) - 后端 API 接口文档
+- [前端需求文档](docs/copy-trading-frontend-requirements.md) - 前端功能文档
 
 ## 🤝 贡献
 
