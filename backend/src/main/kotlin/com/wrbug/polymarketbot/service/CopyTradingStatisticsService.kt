@@ -394,6 +394,166 @@ class CopyTradingStatisticsService(
     }
     
     /**
+     * 获取全局统计
+     */
+    suspend fun getGlobalStatistics(startTime: Long? = null, endTime: Long? = null): Result<StatisticsResponse> {
+        return try {
+            // 获取所有跟单关系
+            val allCopyTradings = copyTradingRepository.findAll()
+            
+            // 计算统计信息
+            val statistics = calculateAggregateStatistics(allCopyTradings.map { it.id!! }, startTime, endTime)
+            
+            Result.success(statistics)
+        } catch (e: Exception) {
+            logger.error("获取全局统计失败", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 获取 Leader 统计
+     */
+    suspend fun getLeaderStatistics(leaderId: Long, startTime: Long? = null, endTime: Long? = null): Result<StatisticsResponse> {
+        return try {
+            // 获取该 Leader 的所有跟单关系
+            val copyTradings = copyTradingRepository.findByLeaderId(leaderId)
+            
+            if (copyTradings.isEmpty()) {
+                return Result.failure(IllegalArgumentException("Leader $leaderId 没有跟单关系"))
+            }
+            
+            // 计算统计信息
+            val statistics = calculateAggregateStatistics(copyTradings.map { it.id!! }, startTime, endTime)
+            
+            Result.success(statistics)
+        } catch (e: Exception) {
+            logger.error("获取 Leader 统计失败: leaderId=$leaderId", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 获取分类统计
+     */
+    suspend fun getCategoryStatistics(category: String, startTime: Long? = null, endTime: Long? = null): Result<StatisticsResponse> {
+        return try {
+            // 验证分类
+            if (category != "sports" && category != "crypto") {
+                return Result.failure(IllegalArgumentException("分类必须是 sports 或 crypto"))
+            }
+            
+            // 获取该分类的所有 Leader
+            val leaders = leaderRepository.findAll().filter { it.category == category }
+            
+            if (leaders.isEmpty()) {
+                return Result.failure(IllegalArgumentException("分类 $category 没有 Leader"))
+            }
+            
+            // 获取这些 Leader 的所有跟单关系
+            val leaderIds = leaders.mapNotNull { it.id }
+            val copyTradings = copyTradingRepository.findAll().filter { it.leaderId in leaderIds }
+            
+            if (copyTradings.isEmpty()) {
+                return Result.failure(IllegalArgumentException("分类 $category 没有跟单关系"))
+            }
+            
+            // 计算统计信息
+            val statistics = calculateAggregateStatistics(copyTradings.map { it.id!! }, startTime, endTime)
+            
+            Result.success(statistics)
+        } catch (e: Exception) {
+            logger.error("获取分类统计失败: category=$category", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 计算聚合统计信息（多个跟单关系的汇总）
+     */
+    private suspend fun calculateAggregateStatistics(
+        copyTradingIds: List<Long>,
+        startTime: Long?,
+        endTime: Long?
+    ): StatisticsResponse {
+        // 获取所有买入订单
+        val allBuyOrders = copyTradingIds.flatMap { copyOrderTrackingRepository.findByCopyTradingId(it) }
+            .filter { order ->
+                // 时间筛选
+                when {
+                    startTime != null && endTime != null -> order.createdAt >= startTime && order.createdAt <= endTime
+                    startTime != null -> order.createdAt >= startTime
+                    endTime != null -> order.createdAt <= endTime
+                    else -> true
+                }
+            }
+        
+        // 获取所有匹配明细（已实现盈亏）
+        val allMatchDetails = copyTradingIds.flatMap { sellMatchDetailRepository.findByCopyTradingId(it) }
+            .filter { detail ->
+                // 时间筛选
+                when {
+                    startTime != null && endTime != null -> detail.createdAt >= startTime && detail.createdAt <= endTime
+                    startTime != null -> detail.createdAt >= startTime
+                    endTime != null -> detail.createdAt <= endTime
+                    else -> true
+                }
+            }
+        
+        // 计算统计指标
+        val totalOrders = allBuyOrders.size.toLong()
+        val totalPnl = allMatchDetails.sumOf { it.realizedPnl.toSafeBigDecimal() }
+        
+        // 计算胜率：盈利订单数 / 总订单数
+        // 盈利订单：该订单的所有匹配明细的盈亏总和 > 0
+        val profitableOrders = allBuyOrders.count { buyOrder ->
+            val orderPnl = allMatchDetails
+                .filter { it.buyOrderId == buyOrder.buyOrderId }
+                .sumOf { it.realizedPnl.toSafeBigDecimal() }
+            orderPnl.gt(BigDecimal.ZERO)
+        }
+        val winRate = if (totalOrders > 0) {
+            (BigDecimal(profitableOrders).divide(BigDecimal(totalOrders), 4, RoundingMode.HALF_UP) * BigDecimal(100))
+                .setScale(2, RoundingMode.HALF_UP)
+        } else {
+            BigDecimal.ZERO
+        }
+        
+        // 平均盈亏
+        val avgPnl = if (totalOrders > 0) {
+            totalPnl.divide(BigDecimal(totalOrders), 8, RoundingMode.HALF_UP)
+        } else {
+            BigDecimal.ZERO
+        }
+        
+        // 最大盈利和最大亏损（按订单计算）
+        var maxProfit = BigDecimal.ZERO
+        var maxLoss = BigDecimal.ZERO
+        
+        allBuyOrders.forEach { buyOrder ->
+            val orderPnl = allMatchDetails
+                .filter { it.buyOrderId == buyOrder.buyOrderId }
+                .sumOf { it.realizedPnl.toSafeBigDecimal() }
+            
+            if (orderPnl.gt(maxProfit)) {
+                maxProfit = orderPnl
+            }
+            if (orderPnl < maxLoss) {
+                maxLoss = orderPnl
+            }
+        }
+        
+        return StatisticsResponse(
+            totalOrders = totalOrders,
+            totalPnl = totalPnl.toString(),
+            winRate = winRate.toString(),
+            avgPnl = avgPnl.toString(),
+            maxProfit = maxProfit.toString(),
+            maxLoss = maxLoss.toString()
+        )
+    }
+    
+    /**
      * 统计数据结构
      */
     private data class StatisticsData(

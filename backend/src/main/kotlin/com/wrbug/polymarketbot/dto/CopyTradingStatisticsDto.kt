@@ -112,3 +112,41 @@ data class StatisticsDetailRequest(
     val copyTradingId: Long
 )
 
+/**
+ * 全局统计请求
+ */
+data class GlobalStatisticsRequest(
+    val startTime: Long? = null,
+    val endTime: Long? = null
+)
+
+/**
+ * Leader 统计请求
+ */
+data class LeaderStatisticsRequest(
+    val leaderId: Long,
+    val startTime: Long? = null,
+    val endTime: Long? = null
+)
+
+/**
+ * 分类统计请求
+ */
+data class CategoryStatisticsRequest(
+    val category: String,  // sports 或 crypto
+    val startTime: Long? = null,
+    val endTime: Long? = null
+)
+
+/**
+ * 统计响应（全局/Leader/分类）
+ */
+data class StatisticsResponse(
+    val totalOrders: Long,
+    val totalPnl: String,
+    val winRate: String,
+    val avgPnl: String,
+    val maxProfit: String,
+    val maxLoss: String
+)
+

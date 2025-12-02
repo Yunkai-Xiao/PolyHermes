@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, message } from 'antd'
-import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Statistic, message, DatePicker, Space, Button, Typography } from 'antd'
+import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined } from '@ant-design/icons'
+import type { Dayjs } from 'dayjs'
 import { apiService } from '../services/api'
 import type { Statistics as StatisticsType } from '../types'
 import { formatUSDC } from '../utils'
+import { useMediaQuery } from 'react-responsive'
+
+const { RangePicker } = DatePicker
+const { Title } = Typography
 
 const Statistics: React.FC = () => {
+  const isMobile = useMediaQuery({ maxWidth: 768 })
   const [stats, setStats] = useState<StatisticsType | null>(null)
   const [loading, setLoading] = useState(false)
+  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null])
   
   useEffect(() => {
     fetchStatistics()
@@ -16,7 +23,10 @@ const Statistics: React.FC = () => {
   const fetchStatistics = async () => {
     setLoading(true)
     try {
-      const response = await apiService.statistics.global()
+      const startTime = dateRange[0] ? dateRange[0].valueOf() : undefined
+      const endTime = dateRange[1] ? dateRange[1].valueOf() : undefined
+      
+      const response = await apiService.statistics.global({ startTime, endTime })
       if (response.data.code === 0 && response.data.data) {
         setStats(response.data.data)
       } else {
@@ -29,10 +39,49 @@ const Statistics: React.FC = () => {
     }
   }
   
+  const handleDateRangeChange = (dates: [Dayjs | null, Dayjs | null] | null) => {
+    setDateRange(dates || [null, null])
+  }
+  
+  const handleReset = () => {
+    setDateRange([null, null])
+    // 重置后自动刷新
+    setTimeout(() => {
+      fetchStatistics()
+    }, 100)
+  }
+  
   return (
     <div>
-      <div style={{ marginBottom: '16px' }}>
-        <h2>统计信息</h2>
+      <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <Title level={2} style={{ margin: 0 }}>统计信息</Title>
+        <Space size="middle" wrap>
+          <RangePicker
+            value={dateRange}
+            onChange={handleDateRangeChange}
+            format="YYYY-MM-DD"
+            placeholder={['开始日期', '结束日期']}
+            size={isMobile ? 'middle' : 'large'}
+            allowClear
+          />
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={fetchStatistics}
+            loading={loading}
+            size={isMobile ? 'middle' : 'large'}
+          >
+            刷新
+          </Button>
+          {(dateRange[0] || dateRange[1]) && (
+            <Button
+              onClick={handleReset}
+              size={isMobile ? 'middle' : 'large'}
+            >
+              重置
+            </Button>
+          )}
+        </Space>
       </div>
       
       <Row gutter={[16, 16]}>
@@ -73,6 +122,8 @@ const Statistics: React.FC = () => {
             <Statistic
               title="平均盈亏"
               value={formatUSDC(stats?.avgPnl || '0')}
+              prefix={stats?.avgPnl && parseFloat(stats.avgPnl || '0') >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+              valueStyle={{ color: stats?.avgPnl && parseFloat(stats.avgPnl || '0') >= 0 ? '#3f8600' : '#cf1322' }}
               suffix="USDC"
               loading={loading}
             />

@@ -34,6 +34,9 @@ class UnifiedWebSocketHandler(
     // 存储每个连接的最后活动时间
     private val lastActivityTime = ConcurrentHashMap<String, Long>()
     
+    // 存储每个会话的同步锁，确保同一会话的消息按顺序发送
+    private val sessionLocks = ConcurrentHashMap<String, Any>()
+    
     // 协程作用域
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var cleanupJob: Job? = null
@@ -52,6 +55,8 @@ class UnifiedWebSocketHandler(
     override fun afterConnectionEstablished(session: WebSocketSession) {
         clientSessions[session.id] = session
         lastActivityTime[session.id] = System.currentTimeMillis()
+        // 为每个会话创建同步锁
+        sessionLocks[session.id] = Any()
         
         // 注册会话到订阅服务
         subscriptionService.registerSession(session.id) { wsMessage ->
@@ -65,10 +70,20 @@ class UnifiedWebSocketHandler(
         // 处理心跳
         if (payload == "PING" || payload == "ping") {
             lastActivityTime[session.id] = System.currentTimeMillis()
-            try {
-                session.sendMessage(TextMessage("PONG"))
-            } catch (e: Exception) {
-                logger.error("发送心跳响应失败: ${session.id}, ${e.message}", e)
+            // 心跳响应也使用同步锁，避免与数据消息冲突
+            val lock = sessionLocks[session.id]
+            if (lock != null && session.isOpen) {
+                synchronized(lock) {
+                    try {
+                        if (session.isOpen) {
+                            session.sendMessage(TextMessage("PONG"))
+                        }
+                    } catch (e: IllegalStateException) {
+                        logger.warn("发送心跳响应时 WebSocket 状态异常: ${session.id}, ${e.message}")
+                    } catch (e: Exception) {
+                        logger.error("发送心跳响应失败: ${session.id}, ${e.message}", e)
+                    }
+                }
             }
             return
         }
@@ -130,21 +145,42 @@ class UnifiedWebSocketHandler(
     
     /**
      * 发送消息给客户端
+     * 使用同步锁确保同一会话的消息按顺序发送，避免并发冲突
      */
     private fun sendMessageToClient(sessionId: String, message: WsMessage) {
         val session = clientSessions[sessionId]
-        if (session != null && session.isOpen) {
+        if (session == null || !session.isOpen) {
+            logger.warn("客户端会话不存在或已关闭: $sessionId")
+            cleanup(sessionId)
+            return
+        }
+        
+        // 获取该会话的同步锁
+        val lock = sessionLocks[sessionId] ?: return
+        
+        // 使用同步块确保同一会话的消息按顺序发送
+        synchronized(lock) {
+            // 再次检查会话状态（可能在等待锁的过程中会话已关闭）
+            val currentSession = clientSessions[sessionId]
+            if (currentSession == null || !currentSession.isOpen) {
+                logger.warn("客户端会话在发送消息前已关闭: $sessionId")
+                cleanup(sessionId)
+                return
+            }
+            
             try {
                 val json = objectMapper.writeValueAsString(message)
-                session.sendMessage(TextMessage(json))
+                currentSession.sendMessage(TextMessage(json))
                 lastActivityTime[sessionId] = System.currentTimeMillis()
+            } catch (e: IllegalStateException) {
+                // WebSocket 状态异常（如 TEXT_PARTIAL_WRITING），记录但不清理会话
+                // 这可能是暂时的状态问题，让后续消息有机会重试
+                logger.warn("发送消息时 WebSocket 状态异常: $sessionId, ${e.message}")
+                // 不立即清理，等待连接自然关闭或下次发送时再处理
             } catch (e: Exception) {
                 logger.error("发送消息失败: $sessionId, ${e.message}", e)
                 cleanup(sessionId)
             }
-        } else {
-            logger.warn("客户端会话不存在或已关闭: $sessionId")
-            cleanup(sessionId)
         }
     }
     
@@ -155,12 +191,14 @@ class UnifiedWebSocketHandler(
         try {
             val session = clientSessions.remove(sessionId)
             lastActivityTime.remove(sessionId)
+            sessionLocks.remove(sessionId)  // 清理同步锁
             subscriptionService.unregisterSession(sessionId)
             
             if (session != null && session.isOpen) {
                 try {
                     session.close(CloseStatus.NORMAL)
                 } catch (e: Exception) {
+                    // 忽略关闭时的异常
                 }
             }
             

@@ -49,6 +49,102 @@ class CopyTradingStatisticsController(
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
         }
     }
+    
+    /**
+     * 获取全局统计
+     * POST /api/copy-trading/statistics/global
+     */
+    @PostMapping("/global")
+    fun getGlobalStatistics(@RequestBody request: GlobalStatisticsRequest): ResponseEntity<ApiResponse<StatisticsResponse>> {
+        return try {
+            val result = runBlocking { 
+                statisticsService.getGlobalStatistics(request.startTime, request.endTime) 
+            }
+            result.fold(
+                onSuccess = { response ->
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("获取全局统计失败", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("获取全局统计异常", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
+        }
+    }
+    
+    /**
+     * 获取 Leader 统计
+     * POST /api/copy-trading/statistics/leader
+     */
+    @PostMapping("/leader")
+    fun getLeaderStatistics(@RequestBody request: LeaderStatisticsRequest): ResponseEntity<ApiResponse<StatisticsResponse>> {
+        return try {
+            if (request.leaderId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ID_INVALID))
+            }
+            
+            val result = runBlocking { 
+                statisticsService.getLeaderStatistics(request.leaderId, request.startTime, request.endTime) 
+            }
+            result.fold(
+                onSuccess = { response ->
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("获取 Leader 统计失败: leaderId=${request.leaderId}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("获取 Leader 统计异常: leaderId=${request.leaderId}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
+        }
+    }
+    
+    /**
+     * 获取分类统计
+     * POST /api/copy-trading/statistics/category
+     */
+    @PostMapping("/category")
+    fun getCategoryStatistics(@RequestBody request: CategoryStatisticsRequest): ResponseEntity<ApiResponse<StatisticsResponse>> {
+        return try {
+            if (request.category.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, "分类不能为空"))
+            }
+            
+            if (request.category != "sports" && request.category != "crypto") {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, "分类必须是 sports 或 crypto"))
+            }
+            
+            val result = runBlocking { 
+                statisticsService.getCategoryStatistics(request.category, request.startTime, request.endTime) 
+            }
+            result.fold(
+                onSuccess = { response ->
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("获取分类统计失败: category=${request.category}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("获取分类统计异常: category=${request.category}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
+        }
+    }
 }
 
 /**
