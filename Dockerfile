@@ -38,11 +38,9 @@ WORKDIR /app
 
 # 安装 Nginx 和必要的工具
 RUN apt-get update && \
-    apt-get install -y nginx curl libcap2-bin && \
+    apt-get install -y nginx curl && \
     rm -rf /var/lib/apt/lists/* && \
-    rm -rf /etc/nginx/sites-enabled/default && \
-    # 给 Nginx 二进制文件设置权限，允许非 root 用户绑定 80 端口
-    setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx || true
+    rm -rf /etc/nginx/sites-enabled/default
 
 # 从构建阶段复制文件
 COPY --from=frontend-build /app/frontend/dist /usr/share/nginx/html
@@ -55,20 +53,21 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# 创建非 root 用户（必须先创建用户，然后才能使用 chown）
+# 创建非 root 用户（用于运行后端应用）
 RUN useradd -m -u 1000 appuser
 
-# 创建 Nginx 运行目录并设置权限
+# 设置目录权限（Nginx 以 root 运行，后端应用以 appuser 运行）
 RUN mkdir -p /var/log/nginx /var/lib/nginx /var/cache/nginx /var/run && \
     chown -R appuser:appuser /app && \
-    chown -R appuser:appuser /usr/share/nginx/html && \
-    chown -R appuser:appuser /var/log/nginx && \
-    chown -R appuser:appuser /var/lib/nginx && \
-    chown -R appuser:appuser /var/cache/nginx && \
-    chown -R appuser:appuser /etc/nginx && \
-    chown -R appuser:appuser /var/run
+    chown -R root:root /usr/share/nginx/html && \
+    chown -R root:root /var/log/nginx && \
+    chown -R root:root /var/lib/nginx && \
+    chown -R root:root /var/cache/nginx && \
+    chown -R root:root /etc/nginx && \
+    chown -R root:root /var/run
 
-USER appuser
+# 保持 root 用户（Nginx 需要 root 权限绑定 80 端口）
+# USER appuser
 
 # 暴露端口
 EXPOSE 80
