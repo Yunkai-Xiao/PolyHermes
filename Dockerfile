@@ -38,9 +38,11 @@ WORKDIR /app
 
 # 安装 Nginx 和必要的工具
 RUN apt-get update && \
-    apt-get install -y nginx curl && \
+    apt-get install -y nginx curl libcap2-bin && \
     rm -rf /var/lib/apt/lists/* && \
-    rm -rf /etc/nginx/sites-enabled/default
+    rm -rf /etc/nginx/sites-enabled/default && \
+    # 给 Nginx 二进制文件设置权限，允许非 root 用户绑定 80 端口
+    setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx || true
 
 # 从构建阶段复制文件
 COPY --from=frontend-build /app/frontend/dist /usr/share/nginx/html
@@ -57,13 +59,14 @@ RUN chmod +x /app/start.sh
 RUN useradd -m -u 1000 appuser
 
 # 创建 Nginx 运行目录并设置权限
-RUN mkdir -p /var/log/nginx /var/lib/nginx /var/cache/nginx && \
+RUN mkdir -p /var/log/nginx /var/lib/nginx /var/cache/nginx /var/run && \
     chown -R appuser:appuser /app && \
     chown -R appuser:appuser /usr/share/nginx/html && \
     chown -R appuser:appuser /var/log/nginx && \
     chown -R appuser:appuser /var/lib/nginx && \
     chown -R appuser:appuser /var/cache/nginx && \
-    chown -R appuser:appuser /etc/nginx
+    chown -R appuser:appuser /etc/nginx && \
+    chown -R appuser:appuser /var/run
 
 USER appuser
 
