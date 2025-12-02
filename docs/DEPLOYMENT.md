@@ -41,7 +41,7 @@
 ```bash
 # 创建 .env 文件
 cat > .env <<EOF
-DB_URL=jdbc:mysql://mysql:3306/polymarket_bot?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
+DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
@@ -107,7 +107,7 @@ cd backend
 ./gradlew clean bootJar
 ```
 
-构建产物位于 `build/libs/polymarket-bot-backend-1.0.0.jar`
+构建产物位于 `build/libs/polyhermes-backend-1.0.0.jar`
 
 2. **使用部署脚本（推荐）**
 
@@ -129,28 +129,28 @@ cd backend
 
 ```bash
 # 开发环境
-java -jar build/libs/polymarket-bot-backend-1.0.0.jar --spring.profiles.active=dev
+java -jar build/libs/polyhermes-backend-1.0.0.jar --spring.profiles.active=dev
 
 # 生产环境
-java -jar build/libs/polymarket-bot-backend-1.0.0.jar --spring.profiles.active=prod
+java -jar build/libs/polyhermes-backend-1.0.0.jar --spring.profiles.active=prod
 ```
 
 4. **使用 systemd 管理（Linux）**
 
 ```bash
 # 复制服务文件
-sudo cp deploy/polymarket-bot-backend.service /etc/systemd/system/
+sudo cp deploy/polyhermes-backend.service /etc/systemd/system/
 
 # 编辑服务文件，修改路径和用户
-sudo nano /etc/systemd/system/polymarket-bot-backend.service
+sudo nano /etc/systemd/system/polyhermes-backend.service
 
 # 启动服务
 sudo systemctl daemon-reload
-sudo systemctl enable polymarket-bot-backend
-sudo systemctl start polymarket-bot-backend
+sudo systemctl enable polyhermes-backend
+sudo systemctl start polyhermes-backend
 
 # 查看日志
-sudo journalctl -u polymarket-bot-backend -f
+sudo journalctl -u polyhermes-backend -f
 ```
 
 ### Docker 部署
@@ -180,7 +180,7 @@ cd backend
 ```bash
 # 创建 .env 文件
 cat > .env <<EOF
-DB_URL=jdbc:mysql://mysql:3306/polymarket_bot?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
+DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
@@ -203,21 +203,21 @@ docker-compose down
 3. **仅构建镜像**
 
 ```bash
-docker build -t polymarket-bot-backend:latest .
+docker build -t polyhermes-backend:latest .
 ```
 
 4. **运行容器**
 
 ```bash
 docker run -d \
-  --name polymarket-bot-backend \
+  --name polyhermes-backend \
   -p 8000:8000 \
   -e SPRING_PROFILES_ACTIVE=prod \
-  -e DB_URL=jdbc:mysql://host.docker.internal:3306/polymarket_bot?useSSL=false \
+  -e DB_URL=jdbc:mysql://host.docker.internal:3306/polyhermes?useSSL=false \
   -e DB_USERNAME=root \
   -e DB_PASSWORD=your_password \
   -e JWT_SECRET=your-jwt-secret \
-  polymarket-bot-backend:latest
+  polyhermes-backend:latest
 ```
 
 ## 前端部署

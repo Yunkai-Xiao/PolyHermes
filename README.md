@@ -47,7 +47,7 @@
 ## 📦 项目结构
 
 ```
-polymarket-bot/
+polyhermes/
 ├── backend/                 # 后端服务
 │   ├── src/main/kotlin/    # Kotlin 源代码
 │   │   ├── api/            # Polymarket API 接口定义
@@ -96,7 +96,7 @@ cd PolyHermes
 创建 MySQL 数据库：
 
 ```sql
-CREATE DATABASE polymarket_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE polyhermes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 3. **启动后端**

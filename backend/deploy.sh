@@ -12,8 +12,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 配置
-APP_NAME="polymarket-bot-backend"
-JAR_NAME="polymarket-bot-backend-1.0.0.jar"
+APP_NAME="polyhermes-backend"
+JAR_NAME="polyhermes-backend-1.0.0.jar"
 DEPLOY_DIR="./deploy"
 PROFILE="${SPRING_PROFILES_ACTIVE:-prod}"
 
@@ -131,7 +131,7 @@ deploy_docker() {
         warn ".env 文件不存在，创建示例文件..."
         cat > .env <<EOF
 # 数据库配置
-DB_URL=jdbc:mysql://mysql:3306/polymarket_bot?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
+DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 

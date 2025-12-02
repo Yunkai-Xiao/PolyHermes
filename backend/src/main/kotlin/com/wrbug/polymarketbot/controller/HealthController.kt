@@ -19,7 +19,7 @@ class HealthController {
         return ResponseEntity.ok(mapOf(
             "status" to "UP",
             "timestamp" to System.currentTimeMillis(),
-            "service" to "polymarket-bot-backend"
+            "service" to "polyhermes-backend"
         ))
     }
 }

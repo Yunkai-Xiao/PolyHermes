@@ -168,6 +168,26 @@ class OrderSigningService {
             // 5. 确保 maker 地址也是小写格式
             val makerAddressLower = makerAddress.lowercase()
             
+            // 打印签名前的订单参数
+            logger.info("========== 订单签名前参数 ==========")
+            logger.info("订单方向: $side")
+            logger.info("价格: $price")
+            logger.info("数量: $size")
+            logger.info("Token ID: $tokenId")
+            logger.info("Maker 地址: $makerAddressLower")
+            logger.info("Signer 地址: $signerAddress")
+            logger.info("Taker 地址: $taker")
+            logger.info("Maker Amount (wei): ${amounts.makerAmount}")
+            logger.info("Taker Amount (wei): ${amounts.takerAmount}")
+            logger.info("Salt: $salt")
+            logger.info("Expiration: $expiration")
+            logger.info("Nonce: $nonce")
+            logger.info("Fee Rate BPS: $feeRateBps")
+            logger.info("Signature Type: $signatureType")
+            logger.info("Exchange Contract: $EXCHANGE_CONTRACT")
+            logger.info("Chain ID: $CHAIN_ID")
+            logger.info("====================================")
+            
             // 6. 构建订单数据并签名
             val signature = signOrder(
                 privateKey = privateKey,

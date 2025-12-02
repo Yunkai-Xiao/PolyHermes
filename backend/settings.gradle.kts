@@ -1,2 +1,2 @@
-rootProject.name = "polymarket-bot-backend"
+rootProject.name = "polyhermes-backend"
 

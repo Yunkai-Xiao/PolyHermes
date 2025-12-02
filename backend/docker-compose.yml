@@ -5,12 +5,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: polymarket-bot-backend
+    container_name: polyhermes-backend
     ports:
       - "${SERVER_PORT:-8000}:8000"
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
-      - DB_URL=${DB_URL:-jdbc:mysql://mysql:3306/polymarket_bot?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4}
+      - DB_URL=${DB_URL:-jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4}
       - DB_USERNAME=${DB_USERNAME:-root}
       - DB_PASSWORD=${DB_PASSWORD:-}
       - SERVER_PORT=8000
@@ -22,16 +22,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - polymarket-network
+      - polyhermes-network
 
   mysql:
     image: mysql:8.2
-    container_name: polymarket-bot-mysql
+    container_name: polyhermes-mysql
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     environment:
       - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-rootpassword}
-      - MYSQL_DATABASE=polymarket_bot
+      - MYSQL_DATABASE=polyhermes
       - MYSQL_CHARACTER_SET_SERVER=utf8mb4
       - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
     volumes:
@@ -43,12 +43,12 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - polymarket-network
+      - polyhermes-network
 
 volumes:
   mysql-data:
 
 networks:
-  polymarket-network:
+  polyhermes-network:
     driver: bridge
 
