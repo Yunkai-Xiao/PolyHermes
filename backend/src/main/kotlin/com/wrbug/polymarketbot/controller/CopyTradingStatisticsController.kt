@@ -1,6 +1,7 @@
 package com.wrbug.polymarketbot.controller
 
 import com.wrbug.polymarketbot.dto.*
+import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.CopyTradingStatisticsService
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -27,7 +28,7 @@ class CopyTradingStatisticsController(
     fun getStatisticsDetail(@RequestBody request: StatisticsDetailRequest): ResponseEntity<ApiResponse<CopyTradingStatisticsResponse>> {
         return try {
             if (request.copyTradingId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("跟单关系ID无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_COPY_TRADING_ID_INVALID))
             }
             
             val result = runBlocking { statisticsService.getStatistics(request.copyTradingId) }
@@ -38,14 +39,14 @@ class CopyTradingStatisticsController(
                 onFailure = { e ->
                     logger.error("获取统计信息失败: copyTradingId=${request.copyTradingId}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("获取统计信息失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("获取统计信息异常: copyTradingId=${request.copyTradingId}", e)
-            ResponseEntity.ok(ApiResponse.serverError("获取统计信息失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_STATISTICS_FETCH_FAILED, e.message))
         }
     }
 }
@@ -70,16 +71,16 @@ class CopyOrderTrackingController(
     fun getOrderList(@RequestBody request: OrderTrackingRequest): ResponseEntity<ApiResponse<OrderListResponse>> {
         return try {
             if (request.copyTradingId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("跟单关系ID无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_COPY_TRADING_ID_INVALID))
             }
             
             if (request.type.isBlank()) {
-                return ResponseEntity.ok(ApiResponse.paramError("订单类型不能为空"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_EMPTY, "订单类型不能为空"))
             }
             
             val validTypes = listOf("buy", "sell", "matched")
             if (!validTypes.contains(request.type.lowercase())) {
-                return ResponseEntity.ok(ApiResponse.paramError("订单类型无效，必须是: buy, sell, matched"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ORDER_TYPE_INVALID_FOR_TRACKING))
             }
             
             val result = statisticsService.getOrderList(request)
@@ -90,14 +91,14 @@ class CopyOrderTrackingController(
                 onFailure = { e ->
                     logger.error("查询订单列表失败: copyTradingId=${request.copyTradingId}, type=${request.type}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("查询订单列表失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ORDER_TRACKING_LIST_FETCH_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("查询订单列表异常: copyTradingId=${request.copyTradingId}, type=${request.type}", e)
-            ResponseEntity.ok(ApiResponse.serverError("查询订单列表失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ORDER_TRACKING_LIST_FETCH_FAILED, e.message))
         }
     }
 }

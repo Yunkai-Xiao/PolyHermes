@@ -1,5 +1,7 @@
 package com.wrbug.polymarketbot.dto
 
+import com.wrbug.polymarketbot.enums.ErrorCode
+
 /**
  * 统一API响应格式
  * @param code 响应码，0表示成功，非0表示失败
@@ -20,45 +22,61 @@ data class ApiResponse<T>(
         }
         
         /**
-         * 创建失败响应
+         * 创建失败响应（使用 ErrorCode 枚举）
+         */
+        fun <T> error(errorCode: ErrorCode, customMsg: String? = null): ApiResponse<T> {
+            return ApiResponse(
+                code = errorCode.code,
+                data = null,
+                msg = customMsg ?: errorCode.message
+            )
+        }
+        
+        /**
+         * 创建失败响应（使用错误码和自定义消息）
          */
         fun <T> error(code: Int, msg: String): ApiResponse<T> {
             return ApiResponse(code = code, data = null, msg = msg)
         }
         
         /**
-         * 创建参数错误响应
+         * 创建参数错误响应（兼容旧代码，建议使用 error(ErrorCode)）
          */
+        @Deprecated("使用 error(ErrorCode.PARAM_ERROR, msg) 替代", ReplaceWith("error(ErrorCode.PARAM_ERROR, msg)"))
         fun <T> paramError(msg: String): ApiResponse<T> {
-            return ApiResponse(code = 1001, data = null, msg = msg)
+            return error(ErrorCode.PARAM_ERROR, msg)
         }
         
         /**
-         * 创建认证错误响应
+         * 创建认证错误响应（兼容旧代码，建议使用 error(ErrorCode)）
          */
+        @Deprecated("使用 error(ErrorCode.AUTH_ERROR, msg) 替代", ReplaceWith("error(ErrorCode.AUTH_ERROR, msg)"))
         fun <T> authError(msg: String): ApiResponse<T> {
-            return ApiResponse(code = 2001, data = null, msg = msg)
+            return error(ErrorCode.AUTH_ERROR, msg)
         }
         
         /**
-         * 创建资源不存在响应
+         * 创建资源不存在响应（兼容旧代码，建议使用 error(ErrorCode)）
          */
+        @Deprecated("使用 error(ErrorCode.NOT_FOUND, msg) 替代", ReplaceWith("error(ErrorCode.NOT_FOUND, msg)"))
         fun <T> notFound(msg: String): ApiResponse<T> {
-            return ApiResponse(code = 3001, data = null, msg = msg)
+            return error(ErrorCode.NOT_FOUND, msg)
         }
         
         /**
-         * 创建业务逻辑错误响应
+         * 创建业务逻辑错误响应（兼容旧代码，建议使用 error(ErrorCode)）
          */
+        @Deprecated("使用 error(ErrorCode.BUSINESS_ERROR, msg) 替代", ReplaceWith("error(ErrorCode.BUSINESS_ERROR, msg)"))
         fun <T> businessError(msg: String): ApiResponse<T> {
-            return ApiResponse(code = 4001, data = null, msg = msg)
+            return error(ErrorCode.BUSINESS_ERROR, msg)
         }
         
         /**
-         * 创建服务器内部错误响应
+         * 创建服务器内部错误响应（兼容旧代码，建议使用 error(ErrorCode)）
          */
+        @Deprecated("使用 error(ErrorCode.SERVER_ERROR, msg) 替代", ReplaceWith("error(ErrorCode.SERVER_ERROR, msg)"))
         fun <T> serverError(msg: String): ApiResponse<T> {
-            return ApiResponse(code = 5001, data = null, msg = msg)
+            return error(ErrorCode.SERVER_ERROR, msg)
         }
     }
 }

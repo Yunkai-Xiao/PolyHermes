@@ -1,6 +1,7 @@
 package com.wrbug.polymarketbot.controller
 
 import com.wrbug.polymarketbot.dto.*
+import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.CopyTradingTemplateService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -24,7 +25,7 @@ class CopyTradingTemplateController(
     fun createTemplate(@RequestBody request: TemplateCreateRequest): ResponseEntity<ApiResponse<TemplateDto>> {
         return try {
             if (request.templateName.isBlank()) {
-                return ResponseEntity.ok(ApiResponse.paramError("模板名称不能为空"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_TEMPLATE_NAME_EMPTY))
             }
             
             val result = templateService.createTemplate(request)
@@ -35,14 +36,14 @@ class CopyTradingTemplateController(
                 onFailure = { e ->
                     logger.error("创建模板失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("创建模板失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_CREATE_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("创建模板异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("创建模板失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_CREATE_FAILED, e.message))
         }
     }
     
@@ -53,7 +54,7 @@ class CopyTradingTemplateController(
     fun updateTemplate(@RequestBody request: TemplateUpdateRequest): ResponseEntity<ApiResponse<TemplateDto>> {
         return try {
             if (request.templateId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("模板 ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_TEMPLATE_ID_INVALID))
             }
             
             val result = templateService.updateTemplate(request)
@@ -64,14 +65,14 @@ class CopyTradingTemplateController(
                 onFailure = { e ->
                     logger.error("更新模板失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("更新模板失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_UPDATE_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("更新模板异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("更新模板失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_UPDATE_FAILED, e.message))
         }
     }
     
@@ -82,7 +83,7 @@ class CopyTradingTemplateController(
     fun deleteTemplate(@RequestBody request: TemplateDeleteRequest): ResponseEntity<ApiResponse<Unit>> {
         return try {
             if (request.templateId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("模板 ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_TEMPLATE_ID_INVALID))
             }
             
             val result = templateService.deleteTemplate(request.templateId)
@@ -93,15 +94,15 @@ class CopyTradingTemplateController(
                 onFailure = { e ->
                     logger.error("删除模板失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.businessError(e.message ?: "业务逻辑错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("删除模板失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.BUSINESS_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_DELETE_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("删除模板异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("删除模板失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_DELETE_FAILED, e.message))
         }
     }
     
@@ -112,10 +113,10 @@ class CopyTradingTemplateController(
     fun copyTemplate(@RequestBody request: TemplateCopyRequest): ResponseEntity<ApiResponse<TemplateDto>> {
         return try {
             if (request.templateId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("模板 ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_TEMPLATE_ID_INVALID))
             }
             if (request.templateName.isBlank()) {
-                return ResponseEntity.ok(ApiResponse.paramError("新模板名称不能为空"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_TEMPLATE_NAME_EMPTY))
             }
             
             val result = templateService.copyTemplate(request)
@@ -126,14 +127,14 @@ class CopyTradingTemplateController(
                 onFailure = { e ->
                     logger.error("复制模板失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("复制模板失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_COPY_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("复制模板异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("复制模板失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_COPY_FAILED, e.message))
         }
     }
     
@@ -150,12 +151,12 @@ class CopyTradingTemplateController(
                 },
                 onFailure = { e ->
                     logger.error("查询模板列表失败: ${e.message}", e)
-                    ResponseEntity.ok(ApiResponse.serverError("查询模板列表失败: ${e.message}"))
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_LIST_FETCH_FAILED, e.message))
                 }
             )
         } catch (e: Exception) {
             logger.error("查询模板列表异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("查询模板列表失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_LIST_FETCH_FAILED, e.message))
         }
     }
     
@@ -166,7 +167,7 @@ class CopyTradingTemplateController(
     fun getTemplateDetail(@RequestBody request: TemplateDetailRequest): ResponseEntity<ApiResponse<TemplateDto>> {
         return try {
             if (request.templateId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("模板 ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_TEMPLATE_ID_INVALID))
             }
             
             val result = templateService.getTemplateDetail(request.templateId)
@@ -177,14 +178,14 @@ class CopyTradingTemplateController(
                 onFailure = { e ->
                     logger.error("查询模板详情失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("查询模板详情失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_DETAIL_FETCH_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("查询模板详情异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("查询模板详情失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_TEMPLATE_DETAIL_FETCH_FAILED, e.message))
         }
     }
 }

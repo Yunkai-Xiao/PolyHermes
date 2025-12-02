@@ -1,6 +1,7 @@
 package com.wrbug.polymarketbot.controller
 
 import com.wrbug.polymarketbot.dto.*
+import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.LeaderService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -24,7 +25,7 @@ class LeaderController(
     fun addLeader(@RequestBody request: LeaderAddRequest): ResponseEntity<ApiResponse<LeaderDto>> {
         return try {
             if (request.leaderAddress.isBlank()) {
-                return ResponseEntity.ok(ApiResponse.paramError("Leader 地址不能为空"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ADDRESS_EMPTY))
             }
             
             val result = leaderService.addLeader(request)
@@ -35,15 +36,15 @@ class LeaderController(
                 onFailure = { e ->
                     logger.error("添加 Leader 失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.businessError(e.message ?: "业务逻辑错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("添加 Leader 失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.BUSINESS_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_ADD_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("添加 Leader 异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("添加 Leader 失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_ADD_FAILED, e.message))
         }
     }
     
@@ -54,7 +55,7 @@ class LeaderController(
     fun updateLeader(@RequestBody request: LeaderUpdateRequest): ResponseEntity<ApiResponse<LeaderDto>> {
         return try {
             if (request.leaderId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("Leader ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ID_INVALID))
             }
             
             val result = leaderService.updateLeader(request)
@@ -65,14 +66,14 @@ class LeaderController(
                 onFailure = { e ->
                     logger.error("更新 Leader 失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("更新 Leader 失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_UPDATE_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("更新 Leader 异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("更新 Leader 失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_UPDATE_FAILED, e.message))
         }
     }
     
@@ -83,7 +84,7 @@ class LeaderController(
     fun deleteLeader(@RequestBody request: LeaderDeleteRequest): ResponseEntity<ApiResponse<Unit>> {
         return try {
             if (request.leaderId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("Leader ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ID_INVALID))
             }
             
             val result = leaderService.deleteLeader(request.leaderId)
@@ -94,15 +95,15 @@ class LeaderController(
                 onFailure = { e ->
                     logger.error("删除 Leader 失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.businessError(e.message ?: "业务逻辑错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("删除 Leader 失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.BUSINESS_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_DELETE_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("删除 Leader 异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("删除 Leader 失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_DELETE_FAILED, e.message))
         }
     }
     
@@ -119,12 +120,12 @@ class LeaderController(
                 },
                 onFailure = { e ->
                     logger.error("查询 Leader 列表失败: ${e.message}", e)
-                    ResponseEntity.ok(ApiResponse.serverError("查询 Leader 列表失败: ${e.message}"))
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_LIST_FETCH_FAILED, e.message))
                 }
             )
         } catch (e: Exception) {
             logger.error("查询 Leader 列表异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("查询 Leader 列表失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_LIST_FETCH_FAILED, e.message))
         }
     }
     
@@ -135,7 +136,7 @@ class LeaderController(
     fun getLeaderDetail(@RequestBody request: LeaderDetailRequest): ResponseEntity<ApiResponse<LeaderDto>> {
         return try {
             if (request.leaderId <= 0) {
-                return ResponseEntity.ok(ApiResponse.paramError("Leader ID 无效"))
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ID_INVALID))
             }
             
             val result = leaderService.getLeaderDetail(request.leaderId)
@@ -146,14 +147,14 @@ class LeaderController(
                 onFailure = { e ->
                     logger.error("查询 Leader 详情失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.paramError(e.message ?: "参数错误"))
-                        else -> ResponseEntity.ok(ApiResponse.serverError("查询 Leader 详情失败: ${e.message}"))
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_DETAIL_FETCH_FAILED, e.message))
                     }
                 }
             )
         } catch (e: Exception) {
             logger.error("查询 Leader 详情异常: ${e.message}", e)
-            ResponseEntity.ok(ApiResponse.serverError("查询 Leader 详情失败: ${e.message}"))
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_DETAIL_FETCH_FAILED, e.message))
         }
     }
 }
