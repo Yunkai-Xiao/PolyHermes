@@ -4,10 +4,10 @@ import jakarta.persistence.*
 
 /**
  * 账户信息实体
- * 用于存储跟单者的账户信息（支持多账户）
+ * 用于存储钱包账户信息（支持多账户）
  */
 @Entity
-@Table(name = "copy_trading_accounts")
+@Table(name = "wallet_accounts")
 data class Account(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

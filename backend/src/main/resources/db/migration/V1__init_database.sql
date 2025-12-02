@@ -5,7 +5,7 @@
 -- ============================================
 -- 1. 创建账户表
 -- ============================================
-CREATE TABLE IF NOT EXISTS copy_trading_accounts (
+CREATE TABLE IF NOT EXISTS wallet_accounts (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     private_key VARCHAR(500) NOT NULL COMMENT '私钥（加密存储）',
     wallet_address VARCHAR(42) NOT NULL UNIQUE COMMENT '钱包地址（从私钥推导）',
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS copy_trading_accounts (
     updated_at BIGINT NOT NULL COMMENT '更新时间（毫秒时间戳）',
     INDEX idx_wallet_address (wallet_address),
     INDEX idx_is_default (is_default)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='跟单系统账户表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包账户表';
 
 -- ============================================
 -- 2. 创建被跟单者（Leader）表
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS copy_trading (
     INDEX idx_template_id (template_id),
     INDEX idx_leader_id (leader_id),
     INDEX idx_enabled (enabled),
-    FOREIGN KEY (account_id) REFERENCES copy_trading_accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES wallet_accounts(id) ON DELETE CASCADE,
     FOREIGN KEY (template_id) REFERENCES copy_trading_templates(id) ON DELETE RESTRICT,
     FOREIGN KEY (leader_id) REFERENCES copy_trading_leaders(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='跟单关系表（钱包-模板关联）';

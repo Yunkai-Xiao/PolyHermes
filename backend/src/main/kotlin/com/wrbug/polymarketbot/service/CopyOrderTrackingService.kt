@@ -461,10 +461,12 @@ class CopyOrderTrackingService(
         }
         
         // 8. 构建订单请求
+        // 跟单订单使用 FAK (Fill-And-Kill)，允许部分成交，未成交部分立即取消
+        // 这样可以快速响应 Leader 的交易，避免订单长期挂单导致价格不匹配
         val orderRequest = NewOrderRequest(
             order = signedOrder,
             owner = account.apiKey!!,
-            orderType = "GTC",  // Good-Til-Cancelled
+            orderType = "FAK",  // Fill-And-Kill
             deferExec = false
         )
         
@@ -584,10 +586,12 @@ class CopyOrderTrackingService(
                 )
                 
                 // 构建订单请求（每次重试都使用新签名的订单）
+                // 跟单订单使用 FAK (Fill-And-Kill)，允许部分成交，未成交部分立即取消
+                // 这样可以快速响应 Leader 的交易，避免订单长期挂单导致价格不匹配
                 val orderRequest = NewOrderRequest(
                     order = signedOrder,
                     owner = owner,  // API Key
-                    orderType = "GTC",  // Good-Til-Cancelled
+                    orderType = "FAK",  // Fill-And-Kill
                     deferExec = false
                 )
                 

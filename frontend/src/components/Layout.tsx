@@ -13,7 +13,9 @@ import {
   AppstoreOutlined,
   TeamOutlined,
   LogoutOutlined,
-  SettingOutlined
+  SettingOutlined,
+  GithubOutlined,
+  TwitterOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -172,12 +174,30 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold' }}>
             PolyHermes
           </div>
-          <Button
-            type="text"
-            icon={<MenuOutlined />}
-            style={{ color: '#fff' }}
-            onClick={() => setMobileMenuOpen(true)}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <a
+              href="https://github.com/WrBug/PolyHermes"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#fff', fontSize: '18px' }}
+            >
+              <GithubOutlined />
+            </a>
+            <a
+              href="https://x.com/quant_tr"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#fff', fontSize: '18px' }}
+            >
+              <TwitterOutlined />
+            </a>
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              style={{ color: '#fff' }}
+              onClick={() => setMobileMenuOpen(true)}
+            />
+          </div>
         </Header>
         <Content style={{ 
           padding: '12px 8px', 
@@ -225,13 +245,34 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           height: '64px', 
           display: 'flex', 
           alignItems: 'center', 
-          justifyContent: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
           color: '#fff',
           fontSize: '18px',
           fontWeight: 'bold',
           flexShrink: 0
         }}>
-          PolyHermes
+          <span>PolyHermes</span>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <a
+              href="https://github.com/WrBug/PolyHermes"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#fff', fontSize: '16px' }}
+              title="GitHub"
+            >
+              <GithubOutlined />
+            </a>
+            <a
+              href="https://x.com/quant_tr"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#fff', fontSize: '16px' }}
+              title="Twitter"
+            >
+              <TwitterOutlined />
+            </a>
+          </div>
         </div>
         <Menu
           mode="inline"

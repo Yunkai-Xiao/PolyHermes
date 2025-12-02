@@ -580,7 +580,7 @@
 ### 3.1 Account（账户信息）
 ```kotlin
 @Entity
-@Table(name = "copy_trading_accounts")
+@Table(name = "wallet_accounts")
 data class Account(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -1623,7 +1623,7 @@ const address = account.address;
 ## 7. 数据库设计
 
 ### 7.1 表结构
-- `copy_trading_accounts`: 账户信息表
+- `wallet_accounts`: 钱包账户表
 - `copy_trading_leaders`: 被跟单者表
 - `copy_trading_templates`: 跟单模板表
 - `copy_trading`: 跟单关系表（钱包-模板关联，多对多）
@@ -1632,7 +1632,7 @@ const address = account.address;
 - `copy_trading_processed_trades`: 已处理交易表（用于去重）
 
 ### 7.2 索引设计
-- `copy_trading_accounts.wallet_address`: UNIQUE 索引
+- `wallet_accounts.wallet_address`: UNIQUE 索引
 - `copy_trading_leaders.leader_address`: UNIQUE 索引
 - `copy_trading_templates.template_name`: UNIQUE 索引
 - `copy_trading.account_id + template_id + leader_id`: 联合唯一索引
