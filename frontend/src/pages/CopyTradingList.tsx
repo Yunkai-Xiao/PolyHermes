@@ -464,10 +464,17 @@ const CopyTradingList: React.FC = () => {
                         }}>
                           {record.templateName}
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', justifyContent: 'space-between' }}>
                           <Tag color={record.enabled ? 'green' : 'red'}>
                             {record.enabled ? '启用' : '禁用'}
                           </Tag>
+                          <Switch
+                            checked={record.enabled}
+                            onChange={() => handleToggleStatus(record)}
+                            checkedChildren="开启"
+                            unCheckedChildren="停止"
+                            size="small"
+                          />
                         </div>
                       </div>
                       

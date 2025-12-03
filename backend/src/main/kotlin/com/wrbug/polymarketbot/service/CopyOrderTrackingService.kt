@@ -661,10 +661,12 @@ class CopyOrderTrackingService(
                 if (!orderResponse.isSuccessful || orderResponse.body() == null) {
                     lastError = Exception("创建订单失败: code=${orderResponse.code()}, message=${orderResponse.message()}")
                     if (attempt < 2) {
-                        logger.warn("创建订单失败，准备重试（重新签名）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt")
+                        // 第一次失败不记录日志，静默重试
                         delay(1000)  // 重试前等待1秒
                         continue
                     }
+                    // 重试后仍然失败，记录日志
+                    logger.warn("创建订单失败（重试后仍失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, code=${orderResponse.code()}, message=${orderResponse.message()}")
                     return Result.failure(lastError!!)
                 }
                 
@@ -672,10 +674,12 @@ class CopyOrderTrackingService(
                 if (!response.success || response.orderId == null) {
                     lastError = Exception("创建订单失败: errorMsg=${response.errorMsg}")
                     if (attempt < 2) {
-                        logger.warn("创建订单失败，准备重试（重新签名）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, errorMsg=${response.errorMsg}")
+                        // 第一次失败不记录日志，静默重试
                         delay(1000)  // 重试前等待1秒
                         continue
                     }
+                    // 重试后仍然失败，记录日志
+                    logger.warn("创建订单失败（重试后仍失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, errorMsg=${response.errorMsg}")
                     return Result.failure(lastError!!)
                 }
                 
@@ -684,10 +688,12 @@ class CopyOrderTrackingService(
             } catch (e: Exception) {
                 lastError = e
                 if (attempt < 2) {
-                    logger.warn("调用创建订单API异常，准备重试（重新签名）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt", e)
+                    // 第一次失败不记录日志，静默重试
                     delay(1000)  // 重试前等待1秒
                     continue
                 }
+                // 重试后仍然失败，记录日志
+                logger.warn("调用创建订单API异常（重试后仍失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt", e)
                 return Result.failure(e)
             }
         }
