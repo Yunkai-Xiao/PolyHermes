@@ -8,7 +8,7 @@ interface DiscordConfigFormProps {
 /**
  * Discord 配置表单组件
  */
-const DiscordConfigForm: React.FC<DiscordConfigFormProps> = ({ form }) => {
+const DiscordConfigForm: React.FC<DiscordConfigFormProps> = ({ form: _form }) => {
   const { t } = useTranslation()
   
   return (
