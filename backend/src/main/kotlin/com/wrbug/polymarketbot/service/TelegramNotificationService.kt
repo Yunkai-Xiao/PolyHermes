@@ -479,20 +479,18 @@ class TelegramNotificationService(
             ""
         }
 
-        return """
-            ✅ <b>$orderCreatedSuccess</b>
-            
-            📊 <b>$orderInfo：</b>
-            • $orderIdLabel: <code>${orderId ?: unknown}</code>
-            • $marketLabel: $marketDisplay$outcomeDisplay
-            • $sideLabel: <b>$sideDisplay</b>
-            • $priceLabel: <code>$price</code>
-            • $quantityLabel: <code>$size</code> shares
-            • $amountLabel: <code>$amountDisplay</code> USDC
-            • $accountLabel: $escapedAccountInfo
-            
-            ⏰ $timeLabel: <code>$time</code>
-        """.trimIndent()
+        return """✅ <b>$orderCreatedSuccess</b>
+
+📊 <b>$orderInfo：</b>
+• $orderIdLabel: <code>${orderId ?: unknown}</code>
+• $marketLabel: $marketDisplay$outcomeDisplay
+• $sideLabel: <b>$sideDisplay</b>
+• $priceLabel: <code>$price</code>
+• $quantityLabel: <code>$size</code> shares
+• $amountLabel: <code>$amountDisplay</code> USDC
+• $accountLabel: $escapedAccountInfo
+
+⏰ $timeLabel: <code>$time</code>"""
     }
 
     /**
@@ -605,22 +603,20 @@ class TelegramNotificationService(
             ""
         }
 
-        return """
-            ❌ <b>$orderCreatedFailed</b>
-            
-            📊 <b>$orderInfo：</b>
-            • $marketLabel: $marketDisplay$outcomeDisplay
-            • $sideLabel: <b>$sideDisplay</b>
-            • $priceLabel: <code>$price</code>
-            • $quantityLabel: <code>$size</code> shares
-            • $amountLabel: <code>$amountDisplay</code> USDC
-            • $accountLabel: $escapedAccountInfo
-            
-            ⚠️ <b>$errorInfo：</b>
-            <code>$escapedErrorMessage</code>
-            
-            ⏰ $timeLabel: <code>$time</code>
-        """.trimIndent()
+        return """❌ <b>$orderCreatedFailed</b>
+
+📊 <b>$orderInfo：</b>
+• $marketLabel: $marketDisplay$outcomeDisplay
+• $sideLabel: <b>$sideDisplay</b>
+• $priceLabel: <code>$price</code>
+• $quantityLabel: <code>$size</code> shares
+• $amountLabel: <code>$amountDisplay</code> USDC
+• $accountLabel: $escapedAccountInfo
+
+⚠️ <b>$errorInfo：</b>
+<code>$escapedErrorMessage</code>
+
+⏰ $timeLabel: <code>$time</code>"""
     }
 
     /**

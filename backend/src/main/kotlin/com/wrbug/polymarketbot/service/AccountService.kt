@@ -111,7 +111,25 @@ class AccountService(
             val encryptedApiSecret = apiKeyCreds.secret?.let { cryptoUtils.encrypt(it) }
             val encryptedApiPassphrase = apiKeyCreds.passphrase?.let { cryptoUtils.encrypt(it) }
 
-            // 8. 创建账户
+            // 8. 生成账户名称（如果未提供，使用钱包地址后四位）
+            val accountName = if (request.accountName.isNullOrBlank()) {
+                val walletAddress = request.walletAddress.trim()
+                // 取地址后四位（去掉 0x 前缀后取后四位）
+                val addressWithoutPrefix = if (walletAddress.startsWith("0x") || walletAddress.startsWith("0X")) {
+                    walletAddress.substring(2)
+                } else {
+                    walletAddress
+                }
+                if (addressWithoutPrefix.length >= 4) {
+                    addressWithoutPrefix.substring(addressWithoutPrefix.length - 4).uppercase()
+                } else {
+                    addressWithoutPrefix.uppercase()
+                }
+            } else {
+                request.accountName.trim()
+            }
+
+            // 9. 创建账户
             val account = Account(
                 privateKey = encryptedPrivateKey,  // 存储加密后的私钥
                 walletAddress = request.walletAddress,
@@ -119,7 +137,7 @@ class AccountService(
                 apiKey = apiKeyCreds.apiKey,
                 apiSecret = encryptedApiSecret,  // 存储加密后的 API Secret
                 apiPassphrase = encryptedApiPassphrase,  // 存储加密后的 API Passphrase
-                accountName = request.accountName,
+                accountName = accountName,
                 isDefault = false,  // 不再支持默认账户
                 isEnabled = request.isEnabled,
                 createdAt = System.currentTimeMillis(),
