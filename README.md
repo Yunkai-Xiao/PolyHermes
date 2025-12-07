@@ -372,8 +372,9 @@ cd frontend
 
 ### 📚 其他文档
 
-- [部署文档](docs/DEPLOYMENT.md) - 详细的部署指南（Java/Docker）
-- [版本号管理文档](docs/VERSION_MANAGEMENT.md) - 版本号管理和自动构建
+- [部署文档](docs/DEPLOYMENT.md) / [English](docs/DEPLOYMENT_EN.md) - 详细的部署指南（Java/Docker）
+- [版本号管理文档](docs/VERSION_MANAGEMENT.md) / [English](docs/VERSION_MANAGEMENT_EN.md) - 版本号管理和自动构建
+- [开发文档](docs/DEVELOPMENT.md) / [English](docs/DEVELOPMENT_EN.md) - 开发指南
 - [跟单系统需求文档](docs/copy-trading-requirements.md) - 后端 API 接口文档
 - [前端需求文档](docs/copy-trading-frontend-requirements.md) - 前端功能文档
 

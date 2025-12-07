@@ -372,8 +372,9 @@ The development documentation includes:
 
 ### 📚 Other Documentation
 
-- [Deployment Documentation](docs/DEPLOYMENT.md) - Detailed deployment guide (Java/Docker)
-- [Version Management Documentation](docs/VERSION_MANAGEMENT.md) - Version number management and auto-build
+- [Deployment Documentation](docs/DEPLOYMENT.md) / [English](docs/DEPLOYMENT_EN.md) - Detailed deployment guide (Java/Docker)
+- [Version Management Documentation](docs/VERSION_MANAGEMENT.md) / [English](docs/VERSION_MANAGEMENT_EN.md) - Version number management and auto-build
+- [Development Documentation](docs/DEVELOPMENT.md) / [English](docs/DEVELOPMENT_EN.md) - Development guide
 - [Copy Trading System Requirements](docs/copy-trading-requirements.md) - Backend API documentation
 - [Frontend Requirements](docs/copy-trading-frontend-requirements.md) - Frontend feature documentation
 
