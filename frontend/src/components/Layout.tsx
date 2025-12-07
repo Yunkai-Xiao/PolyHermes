@@ -17,7 +17,8 @@ import {
   SettingOutlined,
   GithubOutlined,
   TwitterOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  SendOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -197,12 +198,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             size="normal" 
             darkMode={true}
           />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <a
               href="https://github.com/WrBug/PolyHermes"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#fff', fontSize: '18px' }}
+              style={{ color: '#fff', fontSize: '16px', display: 'flex', alignItems: 'center' }}
+              title="GitHub"
             >
               <GithubOutlined />
             </a>
@@ -210,14 +212,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               href="https://x.com/quant_tr"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#fff', fontSize: '18px' }}
+              style={{ color: '#fff', fontSize: '16px', display: 'flex', alignItems: 'center' }}
+              title="Twitter"
             >
               <TwitterOutlined />
+            </a>
+            <a
+              href="https://t.me/+5BwdYvvvuf9iZGZl"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#fff', fontSize: '16px', display: 'flex', alignItems: 'center' }}
+              title="Telegram 交流群"
+            >
+              <SendOutlined />
             </a>
             <Button
               type="text"
               icon={<MenuOutlined />}
-              style={{ color: '#fff' }}
+              style={{ color: '#fff', marginLeft: '4px' }}
               onClick={() => setMobileMenuOpen(true)}
             />
           </div>
@@ -265,23 +277,30 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         }}
       >
         <div style={{ 
-          height: '64px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          padding: '0 16px',
+          padding: '16px',
           color: '#fff',
-          fontSize: '18px',
-          fontWeight: 'bold',
-          flexShrink: 0
+          flexShrink: 0,
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
         }}>
-          <span>PolyHermes</span>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ 
+            fontSize: '18px',
+            fontWeight: 'bold',
+            marginBottom: '12px',
+            textAlign: 'center'
+          }}>
+            PolyHermes
+          </div>
+          <div style={{ 
+            display: 'flex', 
+            gap: '12px', 
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
             <a
               href="https://github.com/WrBug/PolyHermes"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#fff', fontSize: '16px' }}
+              style={{ color: '#fff', fontSize: '18px', display: 'flex', alignItems: 'center' }}
               title="GitHub"
             >
               <GithubOutlined />
@@ -290,10 +309,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               href="https://x.com/quant_tr"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#fff', fontSize: '16px' }}
+              style={{ color: '#fff', fontSize: '18px', display: 'flex', alignItems: 'center' }}
               title="Twitter"
             >
               <TwitterOutlined />
+            </a>
+            <a
+              href="https://t.me/+5BwdYvvvuf9iZGZl"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#fff', fontSize: '18px', display: 'flex', alignItems: 'center' }}
+              title="Telegram 交流群"
+            >
+              <SendOutlined />
             </a>
           </div>
         </div>
@@ -305,7 +333,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           items={menuItems}
           onClick={handleMenuClick}
           style={{ 
-            height: 'calc(100vh - 64px)', 
+            height: 'calc(100vh - 100px)', 
             borderRight: 0,
             overflowY: 'auto'
           }}

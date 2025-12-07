@@ -51,6 +51,9 @@ class PositionCheckService(
     // 记录已发送通知的仓位（避免重复推送）
     private val notifiedRedeemablePositions = ConcurrentHashMap<String, Long>()  // "accountId_marketId_outcomeIndex" -> lastNotificationTime
     
+    // 记录已处理的赎回仓位（避免重复赎回）
+    private val processedRedeemablePositions = ConcurrentHashMap<String, Long>()  // "accountId_marketId_outcomeIndex" -> lastProcessTime
+    
     // 记录已发送提示的配置（避免重复推送）
     private val notifiedConfigs = ConcurrentHashMap<Long, Long>()  // accountId/copyTradingId -> lastNotificationTime
     
@@ -139,6 +142,14 @@ class PositionCheckService(
             notifiedRedeemablePositions.remove(key)
         }
         
+        // 清理过期的已处理赎回仓位记录
+        val expiredProcessed = processedRedeemablePositions.entries.filter { (_, timestamp) ->
+            (now - timestamp) > expireTime
+        }
+        expiredProcessed.forEach { (key, _) ->
+            processedRedeemablePositions.remove(key)
+        }
+        
         // 清理过期的配置通知记录
         val expiredConfigs = notifiedConfigs.entries.filter { (_, timestamp) ->
             (now - timestamp) > expireTime
@@ -147,8 +158,8 @@ class PositionCheckService(
             notifiedConfigs.remove(key)
         }
         
-        if (expiredPositions.isNotEmpty() || expiredConfigs.isNotEmpty()) {
-            logger.debug("清理过期缓存: positions=${expiredPositions.size}, configs=${expiredConfigs.size}")
+        if (expiredPositions.isNotEmpty() || expiredProcessed.isNotEmpty() || expiredConfigs.isNotEmpty()) {
+            logger.debug("清理过期缓存: positions=${expiredPositions.size}, processed=${expiredProcessed.size}, configs=${expiredConfigs.size}")
         }
     }
     
@@ -235,9 +246,28 @@ class PositionCheckService(
                     continue
                 }
                 
+                // 过滤掉已经处理过的仓位（去重，避免重复赎回）
+                val now = System.currentTimeMillis()
+                val positionsToRedeem = positions.filter { position ->
+                    val positionKey = "${accountId}_${position.marketId}_${position.outcomeIndex ?: 0}"
+                    val lastProcessed = processedRedeemablePositions[positionKey]
+                    // 如果最近30分钟内已经处理过，跳过（避免重复赎回）
+                    if (lastProcessed != null && (now - lastProcessed) < 1800000) {  // 30分钟
+                        logger.debug("跳过已处理的赎回仓位: $positionKey (上次处理时间: ${lastProcessed})")
+                        false
+                    } else {
+                        true
+                    }
+                }
+                
+                if (positionsToRedeem.isEmpty()) {
+                    logger.debug("所有仓位都已处理过，跳过赎回: accountId=$accountId")
+                    continue
+                }
+                
                 // 先执行赎回（不查找订单）
                 val redeemRequest = com.wrbug.polymarketbot.dto.PositionRedeemRequest(
-                    positions = positions.map { position ->
+                    positions = positionsToRedeem.map { position ->
                         com.wrbug.polymarketbot.dto.AccountRedeemPositionItem(
                             accountId = accountId,
                             marketId = position.marketId,
@@ -250,10 +280,16 @@ class PositionCheckService(
                 val redeemResult = accountService.redeemPositions(redeemRequest)
                 redeemResult.fold(
                     onSuccess = { response ->
-                        logger.info("自动赎回成功: accountId=$accountId, redeemedCount=${positions.size}, totalValue=${response.totalRedeemedValue}")
+                        logger.info("自动赎回成功: accountId=$accountId, redeemedCount=${positionsToRedeem.size}, totalValue=${response.totalRedeemedValue}")
+                        
+                        // 记录已处理的仓位（避免重复赎回）
+                        for (position in positionsToRedeem) {
+                            val positionKey = "${accountId}_${position.marketId}_${position.outcomeIndex ?: 0}"
+                            processedRedeemablePositions[positionKey] = now
+                        }
                         
                         // 赎回成功后，再查找订单并更新订单状态
-                        for (position in positions) {
+                        for (position in positionsToRedeem) {
                             // 查找相同仓位的未卖出订单（remaining_quantity > 0）
                             val unmatchedOrders = mutableListOf<CopyOrderTracking>()
                             for (copyTrading in copyTradings) {

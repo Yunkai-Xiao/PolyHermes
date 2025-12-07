@@ -72,21 +72,10 @@ const AccountDetail: React.FC = () => {
     
     setEditLoading(true)
     try {
-      // 构建更新请求，空字符串转换为 undefined（不修改）
+      // 构建更新请求，只支持编辑账户名称
       const updateData: any = {
         accountId: account.id,
         accountName: values.accountName || undefined,
-      }
-      
-      // 只有非空字符串才更新 API 凭证
-      if (values.apiKey && values.apiKey.trim()) {
-        updateData.apiKey = values.apiKey.trim()
-      }
-      if (values.apiSecret && values.apiSecret.trim()) {
-        updateData.apiSecret = values.apiSecret.trim()
-      }
-      if (values.apiPassphrase && values.apiPassphrase.trim()) {
-        updateData.apiPassphrase = values.apiPassphrase.trim()
       }
       
       await updateAccount(updateData)
@@ -335,42 +324,18 @@ const AccountDetail: React.FC = () => {
             size={isMobile ? 'middle' : 'large'}
           >
             <Alert
-              message={t('account.editTip')}
-              description={t('account.editTipDesc')}
+              message={t('account.editTip') || '编辑账户'}
+              description={t('account.editTipDesc') || '只能编辑账户名称，API 凭证需要通过导入账户功能更新。'}
               type="info"
               showIcon
               style={{ marginBottom: '24px' }}
             />
             
             <Form.Item
-              label={t('account.accountName')}
+              label={t('account.accountName') || '账户名称'}
               name="accountName"
             >
-              <Input placeholder={t('account.accountNamePlaceholder')} />
-            </Form.Item>
-            
-            <Form.Item
-              label={t('account.apiKey')}
-              name="apiKey"
-              help={t('account.leaveEmptyToNotModify')}
-            >
-              <Input.Password placeholder={t('account.leaveEmptyToNotModify')} />
-            </Form.Item>
-            
-            <Form.Item
-              label={t('account.apiSecret')}
-              name="apiSecret"
-              help={t('account.leaveEmptyToNotModify')}
-            >
-              <Input.Password placeholder={t('account.leaveEmptyToNotModify')} />
-            </Form.Item>
-            
-            <Form.Item
-              label={t('account.apiPassphrase')}
-              name="apiPassphrase"
-              help={t('account.leaveEmptyToNotModify')}
-            >
-              <Input.Password placeholder={t('account.leaveEmptyToNotModify')} />
+              <Input placeholder={t('account.accountNamePlaceholder') || '请输入账户名称（可选）'} />
             </Form.Item>
             
             <Form.Item>

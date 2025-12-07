@@ -266,15 +266,6 @@ const CopyTradingList: React.FC = () => {
       render: (_: any, record: CopyTrading) => {
         const menuItems: MenuProps['items'] = [
           {
-            key: 'edit',
-            label: t('common.edit') || '编辑',
-            icon: <EditOutlined />,
-            onClick: () => navigate(`/copy-trading/edit/${record.id}`)
-          },
-          {
-            type: 'divider'
-          },
-          {
             key: 'buyOrders',
             label: t('copyTradingList.buyOrders') || '买入订单',
             icon: <UnorderedListOutlined />,
