@@ -20,12 +20,29 @@
 在 GitHub 仓库设置中添加以下 Secrets：
 
 - `DOCKER_USERNAME`: Docker Hub 用户名（例如：`wrbug`）
-- `DOCKER_PASSWORD`: Docker Hub 密码或访问令牌
+- `DOCKER_PASSWORD`: Docker Hub 访问令牌（推荐）或密码
 
 **设置步骤**：
-1. 访问 GitHub 仓库 → Settings → Secrets and variables → Actions
-2. 点击 "New repository secret"
-3. 添加 `DOCKER_USERNAME` 和 `DOCKER_PASSWORD`
+
+1. **创建 Docker Hub Access Token**（推荐）：
+   - 访问：https://hub.docker.com/settings/security
+   - 点击 "New Access Token"
+   - 填写描述（如：`GitHub Actions PolyHermes`）
+   - **重要**：勾选以下权限：
+     - ✅ `Read & Write`（用于推送镜像）
+     - ✅ `Delete repository tags`（用于删除镜像）
+   - 点击 "Generate"
+   - **立即复制令牌**（只显示一次）
+
+2. **在 GitHub 中添加 Secrets**：
+   - 访问 GitHub 仓库 → Settings → Secrets and variables → Actions
+   - 点击 "New repository secret"
+   - 添加 `DOCKER_USERNAME`：你的 Docker Hub 用户名
+   - 添加 `DOCKER_PASSWORD`：刚才创建的 Access Token（不是密码）
+
+**注意**：
+- ⚠️ 如果使用密码而不是 Access Token，删除镜像功能可能无法正常工作
+- ✅ 推荐使用 Access Token，并确保有 `Delete repository tags` 权限
 
 ### 2. 创建 Release（必须通过 GitHub Releases 页面）
 
@@ -151,11 +168,38 @@ VITE_APP_GITHUB_REPO_URL=https://github.com/WrBug/PolyHermes
 ### Q5: 删除 release 后 Docker 镜像没有被删除？
 
 **A:** 检查以下几点：
-1. 确认版本号格式为 `v数字.数字.数字`（例如：`v1.0.0`）
+1. 确认版本号格式为 `v数字.数字.数字` 或 `v数字.数字.数字-后缀`（例如：`v1.0.0`, `v1.0.0-beta`）
 2. 确认 Docker Hub 凭证（`DOCKER_USERNAME` 和 `DOCKER_PASSWORD`）正确配置
-3. 确认 Docker Hub 访问令牌有删除镜像的权限
-4. 查看 GitHub Actions 日志，确认删除操作是否执行
-5. 如果镜像标签不存在，会显示警告但不会失败（这是正常的）
+3. **确认 Docker Hub 访问令牌有删除镜像的权限**：
+   - 如果使用 Access Token，需要确保有 `Delete repository tags` 权限
+   - 访问 Docker Hub → Account Settings → Security → Access Tokens
+   - 创建或编辑访问令牌，确保勾选 `Delete repository tags` 权限
+4. 如果遇到 401 错误，可能是：
+   - 访问令牌过期，需要重新生成
+   - 访问令牌权限不足，需要添加删除权限
+   - 用户名或密码/令牌错误
+5. 查看 GitHub Actions 日志，确认删除操作是否执行
+6. 如果镜像标签不存在，会显示警告但不会失败（这是正常的）
+
+### Q7: 删除镜像时遇到 401 未授权错误？
+
+**A:** 这通常是因为认证失败，请检查：
+
+1. **如果使用 Access Token**：
+   - 确保访问令牌未过期
+   - 确保访问令牌有 `Delete repository tags` 权限
+   - 在 Docker Hub → Account Settings → Security → Access Tokens 中检查权限
+
+2. **如果使用密码**：
+   - 确保用户名和密码正确
+   - 如果启用了 2FA，需要使用 Access Token 而不是密码
+
+3. **创建新的 Access Token**：
+   - 访问：https://hub.docker.com/settings/security
+   - 点击 "New Access Token"
+   - 填写描述（如：`GitHub Actions Delete Images`）
+   - **重要**：勾选 `Delete repository tags` 权限
+   - 复制生成的令牌，更新 GitHub Secrets 中的 `DOCKER_PASSWORD`
 
 ### Q6: 版本号格式要求是什么？
 
