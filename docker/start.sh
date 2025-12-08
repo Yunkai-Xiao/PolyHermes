@@ -60,7 +60,7 @@ BACKEND_PID=$!
 # 等待后端服务启动
 echo "等待后端服务启动..."
 for i in {1..60}; do
-    if curl -f http://localhost:8000/api/health > /dev/null 2>&1; then
+    if curl -f http://localhost:8000/api/system/health > /dev/null 2>&1; then
         echo "后端服务已启动"
         break
     fi
