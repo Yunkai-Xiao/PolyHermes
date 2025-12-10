@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Table, Button, Space, Tag, Popconfirm, message, List, Empty, Spin, Divider, Typography } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, LinkOutlined, GlobalOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, GlobalOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
 import type { Leader } from '../types'
@@ -222,23 +222,6 @@ const LeaderList: React.FC = () => {
                           <Text style={{ fontSize: '12px', marginLeft: '4px' }}>
                             {leader.remark}
                           </Text>
-                        </div>
-                      )}
-                      
-                      {/* 网站 */}
-                      {leader.website && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {t('leaderList.website') || '网站'}：
-                          </Text>
-                          <a 
-                            href={leader.website} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '12px', marginLeft: '4px' }}
-                          >
-                            <LinkOutlined /> {leader.website}
-                          </a>
                         </div>
                       )}
                       

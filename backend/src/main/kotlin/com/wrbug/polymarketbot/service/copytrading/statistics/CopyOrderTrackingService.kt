@@ -754,7 +754,28 @@ open class CopyOrderTrackingService(
             return
         }
 
-        // 4. 按FIFO顺序匹配，计算实际可以卖出的数量
+        // 4. 获取tokenId（直接使用outcomeIndex，支持多元市场）
+        val tokenIdResult = blockchainService.getTokenId(leaderSellTrade.market, leaderSellTrade.outcomeIndex)
+        if (tokenIdResult.isFailure) {
+            logger.error("获取tokenId失败: market=${leaderSellTrade.market}, outcomeIndex=${leaderSellTrade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
+            return
+        }
+        val tokenId = tokenIdResult.getOrNull() ?: return
+
+        // 5. 计算卖出价格（优先使用订单簿 bestBid，失败则使用 Leader 价格，固定按90%计算）
+        // 注意：需要先计算卖出价格，因为后续创建 matchDetails 需要使用实际卖出价格
+        val leaderPrice = leaderSellTrade.price.toSafeBigDecimal()
+        val sellPrice = runCatching {
+            clobService.getOrderbookByTokenId(tokenId)
+                .getOrNull()
+                ?.let { calculateMarketSellPrice(it) }
+        }
+            .onFailure { e -> logger.warn("获取订单簿或计算 bestBid 失败，使用 Leader 价格: tokenId=$tokenId, error=${e.message}") }
+            .getOrNull()
+            ?: calculateFallbackSellPrice(leaderPrice)
+
+        // 6. 按FIFO顺序匹配，计算实际可以卖出的数量
+        // 使用计算出的实际卖出价格（而不是 Leader 价格）来创建匹配明细
         var totalMatched = BigDecimal.ZERO
         var remaining = needMatch
         val matchDetails = mutableListOf<SellMatchDetail>()
@@ -769,19 +790,18 @@ open class CopyOrderTrackingService(
 
             if (matchQty.lte(BigDecimal.ZERO)) continue
 
-            // 计算盈亏
+            // 计算盈亏（使用实际卖出价格）
             val buyPrice = order.price.toSafeBigDecimal()
-            val sellPrice = leaderSellTrade.price.toSafeBigDecimal()
             val realizedPnl = sellPrice.subtract(buyPrice).multi(matchQty)
 
-            // 创建匹配明细（稍后保存）
+            // 创建匹配明细（使用实际卖出价格）
             val detail = SellMatchDetail(
                 matchRecordId = 0,  // 稍后设置
                 trackingId = order.id!!,
                 buyOrderId = order.buyOrderId,
                 matchedQuantity = matchQty,
                 buyPrice = buyPrice,
-                sellPrice = sellPrice,
+                sellPrice = sellPrice,  // 使用实际卖出价格，与 SellMatchRecord 保持一致
                 realizedPnl = realizedPnl
             )
             matchDetails.add(detail)
@@ -793,25 +813,6 @@ open class CopyOrderTrackingService(
         if (totalMatched.lte(BigDecimal.ZERO)) {
             return
         }
-
-        // 5. 获取tokenId（直接使用outcomeIndex，支持多元市场）
-        val tokenIdResult = blockchainService.getTokenId(leaderSellTrade.market, leaderSellTrade.outcomeIndex)
-        if (tokenIdResult.isFailure) {
-            logger.error("获取tokenId失败: market=${leaderSellTrade.market}, outcomeIndex=${leaderSellTrade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
-            return
-        }
-        val tokenId = tokenIdResult.getOrNull() ?: return
-
-        // 6. 计算卖出价格（优先使用订单簿 bestBid，失败则使用 Leader 价格，固定按90%计算）
-        val leaderPrice = leaderSellTrade.price.toSafeBigDecimal()
-        val sellPrice = runCatching {
-            clobService.getOrderbookByTokenId(tokenId)
-                .getOrNull()
-                ?.let { calculateMarketSellPrice(it) }
-        }
-            .onFailure { e -> logger.warn("获取订单簿或计算 bestBid 失败，使用 Leader 价格: tokenId=$tokenId, error=${e.message}") }
-            .getOrNull()
-            ?: calculateFallbackSellPrice(leaderPrice)
 
         // 7. 解密私钥（在方法开始时解密一次，后续复用）
         val decryptedPrivateKey = decryptPrivateKey(account)

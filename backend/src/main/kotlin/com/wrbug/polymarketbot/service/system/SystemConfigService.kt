@@ -36,10 +36,38 @@ class SystemConfigService(
         val builderPassphrase = getConfigValue(CONFIG_KEY_BUILDER_PASSPHRASE)
         val autoRedeem = isAutoRedeemEnabled()
 
+        // 获取完整的 API Key（用于前端展示）
+        val builderApiKeyDisplay = builderApiKey?.let { 
+            try {
+                cryptoUtils.decrypt(it)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        
+        val builderSecretDisplay = builderSecret?.let {
+            try {
+                cryptoUtils.decrypt(it)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        
+        val builderPassphraseDisplay = builderPassphrase?.let {
+            try {
+                cryptoUtils.decrypt(it)
+            } catch (e: Exception) {
+                null
+            }
+        }
+
         return SystemConfigDto(
             builderApiKeyConfigured = builderApiKey != null,
             builderSecretConfigured = builderSecret != null,
             builderPassphraseConfigured = builderPassphrase != null,
+            builderApiKeyDisplay = builderApiKeyDisplay,
+            builderSecretDisplay = builderSecretDisplay,
+            builderPassphraseDisplay = builderPassphraseDisplay,
             autoRedeemEnabled = autoRedeem
         )
     }
