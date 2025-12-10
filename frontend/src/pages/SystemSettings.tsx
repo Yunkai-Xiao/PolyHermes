@@ -348,10 +348,11 @@ const SystemSettings: React.FC = () => {
       if (response.data.code === 0 && response.data.data) {
         const config = response.data.data
         setSystemConfig(config)
+        // 将已配置的值填充到输入框中
         relayerForm.setFieldsValue({
-          builderApiKey: '',
-          builderSecret: '',
-          builderPassphrase: '',
+          builderApiKey: config.builderApiKeyDisplay || '',
+          builderSecret: config.builderSecretDisplay || '',
+          builderPassphrase: config.builderPassphraseDisplay || '',
         })
         autoRedeemForm.setFieldsValue({
           autoRedeemEnabled: config.autoRedeemEnabled
@@ -685,30 +686,32 @@ const SystemSettings: React.FC = () => {
             <Form.Item
               label={t('builderApiKey.apiKey')}
               name="builderApiKey"
-              help={systemConfig?.builderApiKeyConfigured ? t('builderApiKey.apiKeyHelp') : t('builderApiKey.apiKeyPlaceholder')}
             >
               <Input 
-                placeholder={systemConfig?.builderApiKeyConfigured ? t('builderApiKey.apiKeyHelp') : t('builderApiKey.apiKeyPlaceholder')}
+                placeholder={t('builderApiKey.apiKeyPlaceholder')}
+                style={{ fontFamily: 'monospace' }}
               />
             </Form.Item>
             
             <Form.Item
               label={t('builderApiKey.secret')}
               name="builderSecret"
-              help={systemConfig?.builderSecretConfigured ? t('builderApiKey.secretHelp') : t('builderApiKey.secretPlaceholder')}
             >
-              <Input 
-                placeholder={systemConfig?.builderSecretConfigured ? t('builderApiKey.secretHelp') : t('builderApiKey.secretPlaceholder')}
+              <Input.Password 
+                placeholder={t('builderApiKey.secretPlaceholder')}
+                style={{ fontFamily: 'monospace' }}
+                iconRender={(visible) => (visible ? <span>👁️</span> : <span>👁️‍🗨️</span>)}
               />
             </Form.Item>
             
             <Form.Item
               label={t('builderApiKey.passphrase')}
               name="builderPassphrase"
-              help={systemConfig?.builderPassphraseConfigured ? t('builderApiKey.passphraseHelp') : t('builderApiKey.passphrasePlaceholder')}
             >
-              <Input 
-                placeholder={systemConfig?.builderPassphraseConfigured ? t('builderApiKey.passphraseHelp') : t('builderApiKey.passphrasePlaceholder')}
+              <Input.Password 
+                placeholder={t('builderApiKey.passphrasePlaceholder')}
+                style={{ fontFamily: 'monospace' }}
+                iconRender={(visible) => (visible ? <span>👁️</span> : <span>👁️‍🗨️</span>)}
               />
             </Form.Item>
             

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Table, Button, Space, Tag, Popconfirm, message, List, Empty, Spin, Divider, Typography } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, LinkOutlined, GlobalOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, GlobalOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
 import type { Leader } from '../types'
@@ -66,14 +66,6 @@ const LeaderList: React.FC = () => {
           {isMobile ? `${address.slice(0, 6)}...${address.slice(-4)}` : address}
         </span>
       )
-    },
-    {
-      title: t('leaderList.category') || '分类',
-      dataIndex: 'category',
-      key: 'category',
-      render: (category: string | undefined) => category ? (
-        <Tag color={category === 'sports' ? 'blue' : 'green'}>{category}</Tag>
-      ) : <Tag>{t('leaderList.all') || '全部'}</Tag>
     },
     {
       title: t('leaderList.remark') || '备注',
@@ -233,37 +225,11 @@ const LeaderList: React.FC = () => {
                         </div>
                       )}
                       
-                      {/* 网站 */}
-                      {leader.website && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {t('leaderList.website') || '网站'}：
-                          </Text>
-                          <a 
-                            href={leader.website} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '12px', marginLeft: '4px' }}
-                          >
-                            <LinkOutlined /> {leader.website}
-                          </a>
-                        </div>
-                      )}
-                      
                       <Divider style={{ margin: '12px 0' }} />
                       
-                      {/* 分类和跟单关系数 */}
+                      {/* 跟单关系数 */}
                       <div style={{ marginBottom: '12px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                          {leader.category ? (
-                            <Tag color={leader.category === 'sports' ? 'blue' : 'green'}>
-                              {leader.category}
-                            </Tag>
-                          ) : (
-                            <Tag>{t('leaderList.all') || '全部'}</Tag>
-                          )}
-                          <Tag>{t('leaderList.copyTradingRelations', { count: leader.copyTradingCount }) || `${leader.copyTradingCount} 个跟单关系`}</Tag>
-                        </div>
+                        <Tag>{t('leaderList.copyTradingRelations', { count: leader.copyTradingCount }) || `${leader.copyTradingCount} 个跟单关系`}</Tag>
                       </div>
                       
                       {/* 创建时间 */}

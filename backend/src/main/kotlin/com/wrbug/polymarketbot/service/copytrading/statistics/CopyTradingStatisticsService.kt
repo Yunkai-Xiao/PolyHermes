@@ -298,8 +298,10 @@ class CopyTradingStatisticsService(
         }
         
         // 卖出统计
+        // 使用 SellMatchDetail 计算总卖出金额，确保准确性
+        // 因为每个明细都记录了准确的匹配数量和卖出价格
         val totalSellQuantity = sellRecords.sumOf { it.totalMatchedQuantity.toSafeBigDecimal() }
-        val totalSellAmount = sellRecords.sumOf { it.totalMatchedQuantity.toSafeBigDecimal().multi(it.sellPrice) }
+        val totalSellAmount = matchDetails.sumOf { it.matchedQuantity.toSafeBigDecimal().multi(it.sellPrice) }
         val totalSellOrders = sellRecords.size.toLong()
         
         // 持仓统计
