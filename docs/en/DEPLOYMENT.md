@@ -104,6 +104,38 @@ export IMAGE_TAG=v1.0.0
 # In docker-compose.prod.yml use: image: wrbug/polyhermes:${IMAGE_TAG:-latest}
 ```
 
+**Update Docker Version**:
+
+When a new version is released, you can update using the following steps:
+
+```bash
+# 1. Stop currently running containers
+docker-compose -f docker-compose.prod.yml down
+
+# 2. Pull the latest version image (or specific version)
+# Update to latest version
+docker pull wrbug/polyhermes:latest
+
+# Or update to specific version (e.g., v1.0.1)
+docker pull wrbug/polyhermes:v1.0.1
+
+# 3. If using a specific version, modify the image tag in docker-compose.prod.yml
+# Edit docker-compose.prod.yml, change image to:
+# image: wrbug/polyhermes:v1.0.1
+
+# 4. Restart services
+docker-compose -f docker-compose.prod.yml up -d
+
+# 5. Check logs to confirm services started normally
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+**Notes**:
+- ⚠️ It is recommended to backup the database before updating (if using MySQL in Docker Compose)
+- ⚠️ Service will be briefly interrupted during update, recommend updating during off-peak hours
+- ✅ Using `docker-compose pull` can automatically pull the latest image and update (if using `latest` tag)
+- ✅ View available versions: Visit [Docker Hub](https://hub.docker.com/r/wrbug/polyhermes/tags) or [GitHub Releases](https://github.com/WrBug/PolyHermes/releases)
+
 2. **Local Build Deployment (Development Environment)**
 
 Suitable for development environments or scenarios requiring custom builds.

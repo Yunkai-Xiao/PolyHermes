@@ -228,6 +228,25 @@ docker-compose up -d
 # image: wrbug/polyhermes:v1.0.0
 ```
 
+**Update Docker Version**:
+
+```bash
+# 1. Stop current containers
+docker-compose -f docker-compose.prod.yml down
+
+# 2. Pull latest image
+docker pull wrbug/polyhermes:latest
+
+# 3. Restart services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Or update to specific version (e.g., v1.0.1)
+# Modify image tag in docker-compose.prod.yml to: image: wrbug/polyhermes:v1.0.1
+# Then run: docker-compose -f docker-compose.prod.yml up -d
+```
+
+For detailed update instructions, please refer to: [Deployment Guide - Update Docker Version](docs/en/DEPLOYMENT.md#update-docker-version)
+
 2. **Local Build Deployment (Development Environment)**
 
 ```bash

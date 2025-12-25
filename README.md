@@ -228,6 +228,25 @@ docker-compose up -d
 # image: wrbug/polyhermes:v1.0.0
 ```
 
+**更新 Docker 版本**：
+
+```bash
+# 1. 停止当前容器
+docker-compose -f docker-compose.prod.yml down
+
+# 2. 拉取最新镜像
+docker pull wrbug/polyhermes:latest
+
+# 3. 重新启动服务
+docker-compose -f docker-compose.prod.yml up -d
+
+# 或更新到特定版本（例如 v1.0.1）
+# 修改 docker-compose.prod.yml 中的镜像标签为: image: wrbug/polyhermes:v1.0.1
+# 然后执行: docker-compose -f docker-compose.prod.yml up -d
+```
+
+详细更新说明请参考：[部署文档 - 更新 Docker 版本](docs/zh/DEPLOYMENT.md#更新-docker-版本)
+
 2. **本地构建部署（开发环境）**
 
 ```bash
