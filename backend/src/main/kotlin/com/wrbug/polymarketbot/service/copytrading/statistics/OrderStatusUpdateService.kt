@@ -194,16 +194,27 @@ class OrderStatusUpdateService(
                     // 如果 orderId 不是 0x 开头，直接标记为已处理（priceUpdated = true 表示已处理，包括价格更新和通知发送）
                     if (!record.sellOrderId.startsWith("0x", ignoreCase = true)) {
                         logger.debug("卖出订单ID非0x开头，直接标记为已处理: orderId=${record.sellOrderId}")
-                        // 发送通知（使用临时数据）
-                        sendSellOrderNotification(
-                            record = record,
-                            useTemporaryData = true,
-                            account = account,
-                            copyTrading = copyTrading,
-                            clobApi = clobApi,
-                            apiSecret = apiSecret,
-                            apiPassphrase = apiPassphrase
-                        )
+                        
+                        // 检查是否为自动生成的订单（AUTO_ 或 AUTO_FIFO_ 开头），如果是则不发送通知
+                        val isAutoOrder = record.sellOrderId.startsWith("AUTO_", ignoreCase = true) || 
+                                         record.sellOrderId.startsWith("AUTO_FIFO_", ignoreCase = true) ||
+                                         record.sellOrderId.startsWith("AUTO_WS_", ignoreCase = true)
+                        
+                        if (!isAutoOrder) {
+                            // 非自动订单，发送通知（使用临时数据）
+                            sendSellOrderNotification(
+                                record = record,
+                                useTemporaryData = true,
+                                account = account,
+                                copyTrading = copyTrading,
+                                clobApi = clobApi,
+                                apiSecret = apiSecret,
+                                apiPassphrase = apiPassphrase
+                            )
+                        } else {
+                            logger.debug("自动生成的订单，跳过发送通知: orderId=${record.sellOrderId}")
+                        }
+                        
                         // 标记为已处理（priceUpdated = true 同时表示价格已更新和通知已发送）
                         val updatedRecord = SellMatchRecord(
                             id = record.id,
@@ -217,6 +228,32 @@ class OrderStatusUpdateService(
                             sellPrice = record.sellPrice,
                             totalRealizedPnl = record.totalRealizedPnl,
                             priceUpdated = true,  // 标记为已处理（价格已更新和通知已发送）
+                            createdAt = record.createdAt
+                        )
+                        sellMatchRecordRepository.save(updatedRecord)
+                        continue
+                    }
+                    
+                    // 检查是否为自动生成的订单（AUTO_ 或 AUTO_FIFO_ 开头），如果是则跳过发送通知
+                    val isAutoOrder = record.sellOrderId.startsWith("AUTO_", ignoreCase = true) || 
+                                     record.sellOrderId.startsWith("AUTO_FIFO_", ignoreCase = true) ||
+                                     record.sellOrderId.startsWith("AUTO_WS_", ignoreCase = true)
+                    
+                    if (isAutoOrder) {
+                        logger.debug("自动生成的订单，跳过发送通知并直接标记为已处理: orderId=${record.sellOrderId}")
+                        // 直接标记为已处理，不发送通知
+                        val updatedRecord = SellMatchRecord(
+                            id = record.id,
+                            copyTradingId = record.copyTradingId,
+                            sellOrderId = record.sellOrderId,
+                            leaderSellTradeId = record.leaderSellTradeId,
+                            marketId = record.marketId,
+                            side = record.side,
+                            outcomeIndex = record.outcomeIndex,
+                            totalMatchedQuantity = record.totalMatchedQuantity,
+                            sellPrice = record.sellPrice,
+                            totalRealizedPnl = record.totalRealizedPnl,
+                            priceUpdated = true,  // 标记为已处理
                             createdAt = record.createdAt
                         )
                         sellMatchRecordRepository.save(updatedRecord)

@@ -603,6 +603,73 @@ class BlockchainService(
     }
     
     /**
+     * 从链上查询市场条件（Condition）的结算结果
+     * 通过调用 ConditionalTokens 合约的 getCondition 函数获取 payouts
+     * 
+     * @param conditionId 市场条件ID（bytes32，必须是 0x 开头的 66 位十六进制字符串）
+     * @return Result<Pair<payoutDenominator, payouts>>
+     *   - payoutDenominator: 支付分母（通常为 1）
+     *   - payouts: 每个 outcome 的支付金额数组（0 或 1）
+     *   - 如果 payouts[outcomeIndex] == 1，表示该 outcome 赢了
+     *   - 如果 payouts[outcomeIndex] == 0，表示该 outcome 输了
+     *   - 如果 payouts 为空，表示市场尚未结算
+     */
+    suspend fun getCondition(conditionId: String): Result<Pair<BigInteger, List<BigInteger>>> {
+        return try {
+            // 验证 conditionId 格式
+            if (conditionId.isBlank() || !conditionId.startsWith("0x") || conditionId.length != 66) {
+                return Result.failure(IllegalArgumentException("conditionId 格式错误，必须是 0x 开头的 66 位十六进制字符串"))
+            }
+            
+            val rpcApi = polygonRpcApi
+            
+            // 构建 getCondition(bytes32) 函数调用
+            // 函数签名: getCondition(bytes32)
+            val functionSelector = EthereumUtils.getFunctionSelector("getCondition(bytes32)")
+            val encodedConditionId = EthereumUtils.encodeBytes32(conditionId)
+            val data = functionSelector + encodedConditionId
+            
+            // 构建 JSON-RPC 请求
+            val rpcRequest = JsonRpcRequest(
+                method = "eth_call",
+                params = listOf(
+                    mapOf(
+                        "to" to conditionalTokensAddress,
+                        "data" to data
+                    ),
+                    "latest"
+                )
+            )
+            
+            // 发送 RPC 请求
+            val response = rpcApi.call(rpcRequest)
+            
+            if (!response.isSuccessful || response.body() == null) {
+                return Result.failure(Exception("RPC 请求失败: ${response.code()} ${response.message()}"))
+            }
+            
+            val rpcResponse = response.body()!!
+            
+            // 检查错误
+            if (rpcResponse.error != null) {
+                return Result.failure(Exception("RPC 错误: ${rpcResponse.error.message}"))
+            }
+            
+            // 使用 Gson 解析 result（JsonElement）
+            val hexResult = rpcResponse.result?.asString 
+                ?: return Result.failure(Exception("RPC 响应格式错误: result 为空"))
+            
+            // 解析 ABI 编码的返回结果
+            val (payoutDenominator, payouts) = EthereumUtils.decodeConditionResult(hexResult)
+            
+            Result.success(Pair(payoutDenominator, payouts))
+        } catch (e: Exception) {
+            logger.error("查询市场条件失败: conditionId=$conditionId, ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
      * 查询交易详情（用于调试和分析）
      * @param txHash 交易哈希
      * @return 交易详情（JSON 字符串）
