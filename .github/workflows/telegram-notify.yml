@@ -50,6 +50,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          # 检查 PR 是否被合并（而不是仅关闭）
+          PR_MERGED="${{ github.event.pull_request.merged }}"
+          if [ "$PR_MERGED" != "true" ]; then
+            echo "ℹ️  PR 仅关闭，未合并，跳过通知"
+            exit 0
+          fi
+          
           # 检查必要的环境变量
           # 注意：TELEGRAM_CHAT_ID 可以是个人聊天 ID（正数）或群组 ID（负数，如 -1001234567890）
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
@@ -75,7 +82,8 @@ jobs:
           # 添加 PR 描述（如果有）
           if [ -n "$PR_BODY" ] && [ "$PR_BODY" != "null" ] && [ "$PR_BODY" != "" ]; then
             # 使用 Python 将 Markdown 转换为 HTML（更可靠）
-            PR_BODY_HTML=$(python3 << 'PYTHON_SCRIPT'
+            # 创建临时 Python 脚本
+            cat > /tmp/markdown_to_html.py << 'PYEOF'
 import sys
 import re
 
@@ -111,16 +119,13 @@ text = re.sub(r'^- (.+)$', r'• \1', text, flags=re.MULTILINE)
 text = re.sub(r'^  - (.+)$', r'  • \1', text, flags=re.MULTILINE)
 text = re.sub(r'^    - (.+)$', r'    • \1', text, flags=re.MULTILINE)
 
-# 换行处理：Telegram HTML 模式不支持 <br> 标签，直接保留换行符 \n
-# Telegram 会自动将 \n 渲染为换行
-
 # 限制长度
 if len(text) > 1000:
     text = text[:1000] + '...\n<i>(内容已截断)</i>'
 
 print(text, end='')
-PYTHON_SCRIPT
-            <<< "$PR_BODY")
+PYEOF
+            PR_BODY_HTML=$(echo "$PR_BODY" | python3 /tmp/markdown_to_html.py)
             
             MESSAGE="${MESSAGE}"$'\n'$'\n'"📄 <b>PR 描述:</b>"$'\n'"${PR_BODY_HTML}"
           fi
