@@ -1,0 +1,156 @@
+name: Telegram Notification on PR Merge
+
+on:
+  pull_request:
+    types:
+      - closed  # 当 PR 被关闭（合并或关闭）时触发
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    # 只在 PR 被合并到 main 分支时执行
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get PR details
+        id: pr_details
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          
+          # 获取 PR 详细信息
+          PR_RESPONSE=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}")
+          
+          # 获取 PR 变更的文件列表
+          FILES_RESPONSE=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/files")
+          
+          # 提取 PR 描述（body），保留换行，限制长度
+          PR_BODY=$(echo "$PR_RESPONSE" | jq -r '.body // ""')
+          if [ ${#PR_BODY} -gt 500 ]; then
+            PR_BODY="${PR_BODY:0:500}..."
+          fi
+          
+          # 保存到输出变量（使用 base64 编码避免特殊字符问题）
+          echo "pr_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$PR_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 检查必要的环境变量
+          # 注意：TELEGRAM_CHAT_ID 可以是个人聊天 ID（正数）或群组 ID（负数，如 -1001234567890）
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "⚠️  Telegram Bot Token 或 Chat ID 未配置，跳过通知"
+            exit 0
+          fi
+          
+          # 获取 PR 基本信息
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
+          
+          # 获取 PR 详细信息
+          PR_BODY="${{ steps.pr_details.outputs.pr_body }}"
+          
+          # 转义 PR 标题和描述中的 HTML 特殊字符（但保留已有的 HTML 标签）
+          PR_TITLE_ESCAPED=$(echo "$PR_TITLE" | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+          
+          # 构建消息内容（使用 HTML 格式）
+          MESSAGE="🚀 <b>PR 已合并到 main 分支</b>
+
+📝 <b>PR #${PR_NUMBER}:</b> ${PR_TITLE_ESCAPED}
+🔗 <b>链接:</b> <a href=\"${PR_URL}\">查看 PR</a>
+🔀 <b>合并提交:</b> <code>${PR_MERGE_COMMIT:0:7}</code>"
+
+          # 添加 PR 描述（如果有）
+          if [ -n "$PR_BODY" ] && [ "$PR_BODY" != "null" ] && [ "$PR_BODY" != "" ]; then
+            # 使用 Python 将 Markdown 转换为 HTML（更可靠）
+            PR_BODY_HTML=$(python3 << 'PYTHON_SCRIPT'
+import sys
+import re
+
+text = sys.stdin.read()
+
+# 转义 HTML 特殊字符（先转义，避免破坏后续的转换）
+text = text.replace('&', '&amp;')
+text = text.replace('<', '&lt;')
+text = text.replace('>', '&gt;')
+
+# 代码块：```code``` → <pre><code>code</code></pre>
+text = re.sub(r'```([^`]+)```', r'<pre><code>\1</code></pre>', text, flags=re.DOTALL)
+
+# 行内代码：`code` → <code>code</code>（不在代码块中）
+text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
+
+# 粗体：**text** → <b>text</b>
+text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
+
+# 斜体：*text* → <i>text</i>（不在粗体或代码中）
+text = re.sub(r'(?<!<[^>]*)\*([^*<>]+)\*(?![^<]*>)', r'<i>\1</i>', text)
+
+# 链接：[text](url) → <a href="url">text</a>
+text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
+
+# 标题：# Heading → <b>Heading</b>
+text = re.sub(r'^### (.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+text = re.sub(r'^## (.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+text = re.sub(r'^# (.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+
+# 列表项：- item → • item
+text = re.sub(r'^- (.+)$', r'• \1', text, flags=re.MULTILINE)
+text = re.sub(r'^  - (.+)$', r'  • \1', text, flags=re.MULTILINE)
+text = re.sub(r'^    - (.+)$', r'    • \1', text, flags=re.MULTILINE)
+
+# 换行处理：Telegram HTML 模式不支持 <br> 标签，直接保留换行符 \n
+# Telegram 会自动将 \n 渲染为换行
+
+# 限制长度
+if len(text) > 1000:
+    text = text[:1000] + '...\n<i>(内容已截断)</i>'
+
+print(text, end='')
+PYTHON_SCRIPT
+            <<< "$PR_BODY")
+            
+            MESSAGE="${MESSAGE}
+
+📄 <b>PR 描述:</b>
+${PR_BODY_HTML}"
+          fi
+          
+          # 发送 Telegram 消息（使用 jq 转义 JSON）
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MESSAGE" \
+              '{chat_id: $chat_id, text: $text, parse_mode: "HTML", disable_web_page_preview: false}')" > /tmp/telegram_response.json
+          
+          # 检查发送结果
+          if [ $? -eq 0 ]; then
+            RESPONSE=$(cat /tmp/telegram_response.json)
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知发送成功"
+            else
+              echo "❌ Telegram 通知发送失败: $RESPONSE"
+              exit 1
+            fi
+          else
+            echo "❌ 发送 Telegram 消息时发生错误"
+            exit 1
+          fi
+
