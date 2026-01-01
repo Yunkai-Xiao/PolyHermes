@@ -82,49 +82,29 @@ jobs:
           # 添加 PR 描述（如果有）
           if [ -n "$PR_BODY" ] && [ "$PR_BODY" != "null" ] && [ "$PR_BODY" != "" ]; then
             # 使用 Python 将 Markdown 转换为 HTML（更可靠）
-            # 创建临时 Python 脚本
-            cat > /tmp/markdown_to_html.py << 'PYEOF'
-import sys
-import re
-
-text = sys.stdin.read()
-
-# 转义 HTML 特殊字符（先转义，避免破坏后续的转换）
-text = text.replace('&', '&amp;')
-text = text.replace('<', '&lt;')
-text = text.replace('>', '&gt;')
-
-# 代码块：```code``` → <pre><code>code</code></pre>
-text = re.sub(r'```([^`]+)```', r'<pre><code>\1</code></pre>', text, flags=re.DOTALL)
-
-# 行内代码：`code` → <code>code</code>（不在代码块中）
-text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
-
-# 粗体：**text** → <b>text</b>
-text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
-
-# 斜体：*text* → <i>text</i>（不在粗体或代码中）
-text = re.sub(r'(?<!<[^>]*)\*([^*<>]+)\*(?![^<]*>)', r'<i>\1</i>', text)
-
-# 链接：[text](url) → <a href="url">text</a>
-text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
-
-# 标题：# Heading → <b>Heading</b>
-text = re.sub(r'^### (.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
-text = re.sub(r'^## (.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
-text = re.sub(r'^# (.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
-
-# 列表项：- item → • item
-text = re.sub(r'^- (.+)$', r'• \1', text, flags=re.MULTILINE)
-text = re.sub(r'^  - (.+)$', r'  • \1', text, flags=re.MULTILINE)
-text = re.sub(r'^    - (.+)$', r'    • \1', text, flags=re.MULTILINE)
-
-# 限制长度
-if len(text) > 1000:
-    text = text[:1000] + '...\n<i>(内容已截断)</i>'
-
-print(text, end='')
-PYEOF
+            # 使用 echo 创建临时 Python 脚本，避免 heredoc 导致的 YAML 解析问题
+            echo 'import sys' > /tmp/markdown_to_html.py
+            echo 'import re' >> /tmp/markdown_to_html.py
+            echo '' >> /tmp/markdown_to_html.py
+            echo 'text = sys.stdin.read()' >> /tmp/markdown_to_html.py
+            echo '' >> /tmp/markdown_to_html.py
+            echo 'text = text.replace("&", "&amp;")' >> /tmp/markdown_to_html.py
+            echo 'text = text.replace("<", "&lt;")' >> /tmp/markdown_to_html.py
+            echo 'text = text.replace(">", "&gt;")' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"```([^`]+)```", r"<pre><code>\\1</code></pre>", text, flags=re.DOTALL)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"`([^`]+)`", r"<code>\\1</code>", text)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"\\*\\*([^*]+)\\*\\*", r"<b>\\1</b>", text)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"(?<!<[^>]*)\\*([^*<>]+)\\*(?![^<]*>)", r"<i>\\1</i>", text)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"\\[([^\\]]+)\\]\\(([^)]+)\\)", r"<a href=\\"\\2\\">\\1</a>", text)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"^### (.+)$", r"<b>\\1</b>", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"^## (.+)$", r"<b>\\1</b>", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"^# (.+)$", r"<b>\\1</b>", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"^- (.+)$", r"• \\1", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"^  - (.+)$", r"  • \\1", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
+            echo 'text = re.sub(r"^    - (.+)$", r"    • \\1", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
+            echo 'if len(text) > 1000:' >> /tmp/markdown_to_html.py
+            echo '    text = text[:1000] + "...\\n<i>(内容已截断)</i>"' >> /tmp/markdown_to_html.py
+            echo 'print(text, end="")' >> /tmp/markdown_to_html.py
             PR_BODY_HTML=$(echo "$PR_BODY" | python3 /tmp/markdown_to_html.py)
             
             MESSAGE="${MESSAGE}"$'\n'$'\n'"📄 <b>PR 描述:</b>"$'\n'"${PR_BODY_HTML}"
