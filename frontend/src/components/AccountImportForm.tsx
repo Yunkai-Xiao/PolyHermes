@@ -35,7 +35,7 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const { importAccount, loading } = useAccountStore()
   const [importType, setImportType] = useState<ImportType>('privateKey')
-  const [walletType, setWalletType] = useState<WalletType>('magic')
+  const [walletType, setWalletType] = useState<WalletType>('safe')
   const [derivedAddress, setDerivedAddress] = useState<string>('')
   const [addressError, setAddressError] = useState<string>('')
   
@@ -211,7 +211,10 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
           label={
             <span>
               {t('accountImport.walletType')}{' '}
-              <Tooltip title={t('accountImport.walletTypeHelp')}>
+              <Tooltip 
+                title={t('accountImport.walletTypeHelp')}
+                overlayInnerStyle={{ whiteSpace: 'pre-line', maxWidth: '300px' }}
+              >
                 <QuestionCircleOutlined style={{ color: '#999' }} />
               </Tooltip>
             </span>
@@ -221,11 +224,11 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
             value={walletType}
             onChange={(e) => setWalletType(e.target.value)}
           >
-            <Radio value="magic">
-              {t('accountImport.walletTypeMagic')}
-            </Radio>
             <Radio value="safe">
               {t('accountImport.walletTypeSafe')}
+            </Radio>
+            <Radio value="magic">
+              {t('accountImport.walletTypeMagic')}
             </Radio>
           </Radio.Group>
         </Form.Item>

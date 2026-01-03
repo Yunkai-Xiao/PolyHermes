@@ -73,6 +73,7 @@ data class AccountDto(
     val proxyAddress: String,  // Polymarket 代理钱包地址
     val accountName: String?,
     val isEnabled: Boolean,  // 是否启用（用于订单推送等功能的开关）
+    val walletType: String = "magic",  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
     val apiKeyConfigured: Boolean,  // API Key 是否已配置（不返回实际 Key）
     val apiSecretConfigured: Boolean,  // API Secret 是否已配置
     val apiPassphraseConfigured: Boolean,  // API Passphrase 是否已配置

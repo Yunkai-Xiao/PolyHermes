@@ -151,6 +151,7 @@ class AccountService(
                 accountName = accountName,
                 isDefault = false,  // 不再支持默认账户
                 isEnabled = request.isEnabled,
+                walletType = request.walletType,  // 保存钱包类型
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
@@ -211,9 +212,9 @@ class AccountService(
             val account = accountRepository.findById(accountId)
                 .orElse(null) ?: return Result.failure(IllegalArgumentException("账户不存在"))
 
-            // 重新获取代理地址
+            // 重新获取代理地址（使用保存的钱包类型）
             val proxyAddress = runBlocking {
-                val proxyResult = blockchainService.getProxyAddress(account.walletAddress)
+                val proxyResult = blockchainService.getProxyAddress(account.walletAddress, account.walletType)
                 if (proxyResult.isSuccess) {
                     proxyResult.getOrNull()
                         ?: throw IllegalStateException("获取代理地址返回空值")
@@ -250,7 +251,7 @@ class AccountService(
             accounts.forEach { account ->
                 try {
                     val proxyAddress = runBlocking {
-                        val proxyResult = blockchainService.getProxyAddress(account.walletAddress)
+                        val proxyResult = blockchainService.getProxyAddress(account.walletAddress, account.walletType)
                         if (proxyResult.isSuccess) {
                             proxyResult.getOrNull()
                         } else {
@@ -443,6 +444,7 @@ class AccountService(
                 proxyAddress = account.proxyAddress,
                 accountName = account.accountName,
                 isEnabled = account.isEnabled,
+                walletType = account.walletType,
                 apiKeyConfigured = account.apiKey != null,
                 apiSecretConfigured = account.apiSecret != null,
                 apiPassphraseConfigured = account.apiPassphrase != null,

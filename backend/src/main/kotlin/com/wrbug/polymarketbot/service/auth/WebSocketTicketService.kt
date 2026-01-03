@@ -1,5 +1,6 @@
 package com.wrbug.polymarketbot.service.auth
 
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
@@ -79,5 +80,14 @@ class WebSocketTicketService {
     private fun cleanupExpiredTickets() {
         val now = System.currentTimeMillis()
         tickets.entries.removeIf { it.value.expiresAt < now }
+    }
+    
+    /**
+     * 定时清理过期票据（每分钟执行一次）
+     * 防止过期票据长时间占用内存
+     */
+    @Scheduled(fixedRate = 60_000)  // 60秒 = 60000毫秒
+    fun scheduledCleanup() {
+        cleanupExpiredTickets()
     }
 }
