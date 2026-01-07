@@ -232,7 +232,7 @@ docker pull wrbug/polyhermes:v1.1.2
 
 * **GitHub 仓库**：https://github.com/WrBug/PolyHermes
 * **Twitter**：@polyhermes
-* **Telegram 群组**：加入群组
+* **Telegram 群组**：https://t.me/polyhermes
 
 ---
 
@@ -399,7 +399,7 @@ docker pull wrbug/polyhermes:v1.1.1
 
 * **GitHub 仓库**：https://github.com/WrBug/PolyHermes
 * **Twitter**：@polyhermes
-* **Telegram 群组**：加入群组
+* **Telegram 群组**：https://t.me/polyhermes
 
 ---
 
