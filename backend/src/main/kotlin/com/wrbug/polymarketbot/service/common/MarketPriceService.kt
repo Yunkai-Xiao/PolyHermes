@@ -50,11 +50,10 @@ class MarketPriceService(
         }
         
         // 如果链上查询出现 RPC 错误（execution reverted），说明市场可能不存在或尚未创建
-        // 在这种情况下，不应该继续处理，应该抛出异常，让调用方决定如何处理
+        // 在这种情况下，降级到其他数据源（CLOB API 或 Gamma API），而不是直接抛出异常
+        // 因为 marketId 可能在 API 中存在，但在链上尚未创建
         if (hasRpcError) {
-            val errorMsg = "链上查询市场条件出现 RPC 错误（execution reverted），市场可能不存在或尚未创建: marketId=$marketId, outcomeIndex=$outcomeIndex"
-            logger.warn(errorMsg)
-            throw IllegalStateException(errorMsg)
+            logger.debug("链上查询市场条件出现 RPC 错误（execution reverted），降级到 API 查询: marketId=$marketId, outcomeIndex=$outcomeIndex")
         }
         
         // 2. 从 CLOB API 查询订单簿价格（最准确，优先使用）
