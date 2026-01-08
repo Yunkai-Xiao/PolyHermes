@@ -32,7 +32,8 @@ class CopyTradingStatisticsService(
     private val accountRepository: AccountRepository,
     private val leaderRepository: LeaderRepository,
     private val accountService: AccountService,
-    private val blockchainService: BlockchainService
+    private val blockchainService: BlockchainService,
+    private val marketService: com.wrbug.polymarketbot.service.common.MarketService
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingStatisticsService::class.java)
@@ -165,13 +166,19 @@ class CopyTradingStatisticsService(
         val end = minOf(start + limit, orders.size)
         val pagedOrders = if (start < orders.size) orders.subList(start, end) else emptyList()
         
+        // 批量获取市场信息
+        val marketIds = pagedOrders.map { it.marketId }.distinct()
+        val markets = marketService.getMarkets(marketIds)
+        
         // 转换为DTO
         val list = pagedOrders.map { order ->
             val amount = order.quantity.toSafeBigDecimal().multi(order.price)
+            val market = markets[order.marketId]
             BuyOrderInfo(
                 orderId = order.buyOrderId,
                 leaderTradeId = order.leaderBuyTradeId,
                 marketId = order.marketId,
+                marketTitle = market?.title,
                 side = order.side,
                 quantity = order.quantity.toString(),
                 price = order.price.toString(),
@@ -212,13 +219,19 @@ class CopyTradingStatisticsService(
         val end = minOf(start + limit, records.size)
         val pagedRecords = if (start < records.size) records.subList(start, end) else emptyList()
         
+        // 批量获取市场信息
+        val marketIds = pagedRecords.map { it.marketId }.distinct()
+        val markets = marketService.getMarkets(marketIds)
+        
         // 转换为DTO
         val list = pagedRecords.map { record ->
             val amount = record.totalMatchedQuantity.toSafeBigDecimal().multi(record.sellPrice)
+            val market = markets[record.marketId]
             SellOrderInfo(
                 orderId = record.sellOrderId,
                 leaderTradeId = record.leaderSellTradeId,
                 marketId = record.marketId,
+                marketTitle = market?.title,
                 side = record.side,
                 quantity = record.totalMatchedQuantity.toString(),
                 price = record.sellPrice.toString(),
@@ -263,11 +276,23 @@ class CopyTradingStatisticsService(
         val end = minOf(start + limit, filtered.size)
         val pagedDetails = if (start < filtered.size) filtered.subList(start, end) else emptyList()
         
+        // 获取匹配记录以获取市场ID
+        val matchRecordIds = pagedDetails.map { it.matchRecordId }.distinct()
+        val matchRecords = matchRecordIds.mapNotNull { id ->
+            sellMatchRecordRepository.findById(id).orElse(null)
+        }
+        val marketIds = matchRecords.map { it.marketId }.distinct()
+        val markets = marketService.getMarkets(marketIds)
+        
         // 转换为DTO
         val list = pagedDetails.map { detail ->
+            val matchRecord = matchRecords.find { it.id == detail.matchRecordId }
+            val market = matchRecord?.let { markets[it.marketId] }
             MatchedOrderInfo(
-                sellOrderId = sellMatchRecordRepository.findById(detail.matchRecordId).orElse(null)?.sellOrderId ?: "",
+                sellOrderId = matchRecord?.sellOrderId ?: "",
                 buyOrderId = detail.buyOrderId,
+                marketId = matchRecord?.marketId,
+                marketTitle = market?.title,
                 matchedQuantity = detail.matchedQuantity.toString(),
                 buyPrice = detail.buyPrice.toString(),
                 sellPrice = detail.sellPrice.toString(),

@@ -627,6 +627,7 @@ export interface BuyOrderInfo {
   orderId: string
   leaderTradeId: string
   marketId: string
+  marketTitle?: string  // 市场名称
   side: string
   quantity: string
   price: string
@@ -644,6 +645,7 @@ export interface SellOrderInfo {
   orderId: string
   leaderTradeId: string
   marketId: string
+  marketTitle?: string  // 市场名称
   side: string
   quantity: string
   price: string
@@ -658,6 +660,8 @@ export interface SellOrderInfo {
 export interface MatchedOrderInfo {
   sellOrderId: string
   buyOrderId: string
+  marketId?: string  // 市场ID
+  marketTitle?: string  // 市场名称
   matchedQuantity: string
   buyPrice: string
   sellPrice: string

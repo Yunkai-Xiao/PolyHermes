@@ -40,6 +40,7 @@ data class BuyOrderInfo(
     val orderId: String,
     val leaderTradeId: String,
     val marketId: String,
+    val marketTitle: String? = null,  // 市场名称
     val side: String,
     val quantity: String,
     val price: String,
@@ -57,6 +58,7 @@ data class SellOrderInfo(
     val orderId: String,
     val leaderTradeId: String,
     val marketId: String,
+    val marketTitle: String? = null,  // 市场名称
     val side: String,
     val quantity: String,
     val price: String,
@@ -71,6 +73,8 @@ data class SellOrderInfo(
 data class MatchedOrderInfo(
     val sellOrderId: String,
     val buyOrderId: String,
+    val marketId: String? = null,  // 市场ID（从买入订单获取）
+    val marketTitle: String? = null,  // 市场名称
     val matchedQuantity: String,
     val buyPrice: String,
     val sellPrice: String,
