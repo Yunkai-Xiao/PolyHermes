@@ -1,5 +1,7 @@
 package com.wrbug.polymarketbot.service.common
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.wrbug.polymarketbot.api.MarketResponse
 import com.wrbug.polymarketbot.api.PolymarketGammaApi
 import com.wrbug.polymarketbot.entity.Market
@@ -9,7 +11,6 @@ import com.wrbug.polymarketbot.util.getEventSlug
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 市场信息服务
@@ -20,11 +21,13 @@ class MarketService(
     val marketRepository: MarketRepository,  // 改为 public，供 MarketPollingService 使用
     private val retrofitFactory: RetrofitFactory
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(MarketService::class.java)
-    
-    // 内存缓存（避免频繁查询数据库）
-    private val marketCache = ConcurrentHashMap<String, Market>()
+
+    // LRU 缓存（避免频繁查询数据库），最多缓存 200 条记录
+    private val marketCache: Cache<String, Market> = Caffeine.newBuilder()
+        .maximumSize(200)  // 最多缓存 200 条记录
+        .build()
     
     /**
      * 根据市场ID获取市场信息
@@ -32,15 +35,15 @@ class MarketService(
      */
     fun getMarket(marketId: String): Market? {
         // 1. 从缓存获取
-        marketCache[marketId]?.let { return it }
-        
+        marketCache.getIfPresent(marketId)?.let { return it }
+
         // 2. 从数据库查询
         val market = marketRepository.findByMarketId(marketId)
         if (market != null) {
-            marketCache[marketId] = market
+            marketCache.put(marketId, market)
             return market
         }
-        
+
         // 3. 从API获取（异步，不阻塞）
         runBlocking {
             try {
@@ -49,10 +52,10 @@ class MarketService(
                 logger.warn("获取市场信息失败: marketId=$marketId, error=${e.message}")
             }
         }
-        
+
         // 再次从数据库查询（API可能已经保存）
         return marketRepository.findByMarketId(marketId)?.also {
-            marketCache[marketId] = it
+            marketCache.put(marketId, it)
         }
     }
     
@@ -87,7 +90,7 @@ class MarketService(
             val savedMarkets = marketRepository.findByMarketIdIn(missingIds)
             for (market in savedMarkets) {
                 result[market.marketId] = market
-                marketCache[market.marketId] = market
+                marketCache.put(market.marketId, market)
             }
         }
         
@@ -192,7 +195,7 @@ class MarketService(
             }
             
             val savedMarket = marketRepository.save(market)
-            marketCache[marketId] = savedMarket
+            marketCache.put(marketId, savedMarket)
             savedMarket
         } catch (e: Exception) {
             logger.error("保存市场信息失败: marketId=$marketId, error=${e.message}", e)
@@ -204,7 +207,7 @@ class MarketService(
      * 清除缓存（用于测试或手动刷新）
      */
     fun clearCache() {
-        marketCache.clear()
+        marketCache.invalidateAll()
     }
 }
 

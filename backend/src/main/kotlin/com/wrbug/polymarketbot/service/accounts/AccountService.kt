@@ -11,6 +11,7 @@ import com.wrbug.polymarketbot.util.JsonUtils
 import com.wrbug.polymarketbot.util.getEventSlug
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.common.BlockchainService
+import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.common.PolymarketApiKeyService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderPushService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderSigningService
@@ -37,6 +38,7 @@ class AccountService(
     private val orderPushService: OrderPushService,
     private val orderSigningService: OrderSigningService,
     private val cryptoUtils: CryptoUtils,
+    private val marketService: MarketService,  // 市场信息服务
     private val telegramNotificationService: TelegramNotificationService? = null,  // 可选，避免循环依赖
     private val relayClientService: RelayClientService,
     private val jsonUtils: JsonUtils
@@ -935,35 +937,22 @@ class AccountService(
                     notificationScope.launch {
                         try {
                             // 获取市场信息（标题和slug）
-                            val marketInfo = withContext(Dispatchers.IO) {
-                                try {
-                                    val gammaApi = retrofitFactory.createGammaApi()
-                                    val marketResponse = gammaApi.listMarkets(conditionIds = listOf(request.marketId))
-                                    if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                        marketResponse.body()!!.firstOrNull()
-                                    } else {
-                                        null
-                                    }
-                                } catch (e: Exception) {
-                                    logger.warn("获取市场信息失败: ${e.message}", e)
-                                    null
-                                }
-                            }
-                            
-                            val marketTitle = marketInfo?.question ?: request.marketId
-                            
+                            val market = marketService.getMarket(request.marketId)
+                            val marketTitle = market?.title ?: request.marketId
+                            val marketSlug = market?.eventSlug  // 跳转用的 slug
+
                             // 获取当前语言设置（从 LocaleContextHolder）
                             val locale = try {
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale()
                             } catch (e: Exception) {
                                 java.util.Locale("zh", "CN")  // 默认简体中文
                             }
-                            
+
                             telegramNotificationService?.sendOrderSuccessNotification(
                                 orderId = orderId,
                                 marketTitle = marketTitle,
                                 marketId = request.marketId,
-                                marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
+                                marketSlug = marketSlug,
                                 side = request.side,
                                 price = sellPrice,  // 直接传递卖出价格
                                 size = sellQuantity.toPlainString(),  // 直接传递卖出数量
@@ -1002,34 +991,21 @@ class AccountService(
                     notificationScope.launch {
                         try {
                             // 获取市场信息（标题和slug）
-                            val marketInfo = withContext(Dispatchers.IO) {
-                                try {
-                                    val gammaApi = retrofitFactory.createGammaApi()
-                                    val marketResponse = gammaApi.listMarkets(conditionIds = listOf(request.marketId))
-                                    if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                        marketResponse.body()!!.firstOrNull()
-                                    } else {
-                                        null
-                                    }
-                                } catch (e: Exception) {
-                                    logger.warn("获取市场信息失败: ${e.message}", e)
-                                    null
-                                }
-                            }
-                            
-                            val marketTitle = marketInfo?.question ?: request.marketId
-                            
+                            val market = marketService.getMarket(request.marketId)
+                            val marketTitle = market?.title ?: request.marketId
+                            val marketSlug = market?.eventSlug  // 跳转用的 slug
+
                             // 获取当前语言设置（从 LocaleContextHolder）
                             val locale = try {
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale()
                             } catch (e: Exception) {
                                 java.util.Locale("zh", "CN")  // 默认简体中文
                             }
-                            
+
                             telegramNotificationService?.sendOrderFailureNotification(
                                 marketTitle = marketTitle,
                                 marketId = request.marketId,
-                                marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
+                                marketSlug = marketSlug,
                                 side = request.side,
                                 outcome = null,  // 失败时可能没有 outcome
                                 price = if (request.orderType == "LIMIT") sellPrice.toString() else "MARKET",
@@ -1059,37 +1035,24 @@ class AccountService(
                 notificationScope.launch {
                     try {
                         // 获取市场信息（标题和slug）
-                        val marketInfo = withContext(Dispatchers.IO) {
-                            try {
-                                val gammaApi = retrofitFactory.createGammaApi()
-                                val marketResponse = gammaApi.listMarkets(conditionIds = listOf(request.marketId))
-                                if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                    marketResponse.body()!!.firstOrNull()
-                                } else {
-                                    null
-                                }
-                            } catch (e: Exception) {
-                                logger.warn("获取市场信息失败: ${e.message}", e)
-                                null
-                            }
-                        }
-                        
-                        val marketTitle = marketInfo?.question ?: request.marketId
-                        
+                        val market = marketService.getMarket(request.marketId)
+                        val marketTitle = market?.title ?: request.marketId
+                        val marketSlug = market?.eventSlug  // 跳转用的 slug
+
                         // 获取当前语言设置（从 LocaleContextHolder）
                         val locale = try {
                             org.springframework.context.i18n.LocaleContextHolder.getLocale()
                         } catch (e: Exception) {
                             java.util.Locale("zh", "CN")  // 默认简体中文
                         }
-                        
+
                         // 只传递后端返回的 msg，不传递完整堆栈
                         val errorMsg = orderResponse.body()?.errorMsg ?: "创建订单失败"
-                        
+
                         telegramNotificationService?.sendOrderFailureNotification(
                             marketTitle = marketTitle,
                             marketId = request.marketId,
-                            marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
+                            marketSlug = marketSlug,
                             side = request.side,
                             outcome = null,  // 失败时可能没有 outcome
                             price = if (request.orderType == "LIMIT") sellPrice.toString() else "MARKET",

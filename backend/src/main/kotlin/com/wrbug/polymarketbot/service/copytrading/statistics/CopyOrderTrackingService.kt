@@ -7,7 +7,6 @@ import com.wrbug.polymarketbot.entity.*
 import com.wrbug.polymarketbot.repository.*
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.*
-import com.wrbug.polymarketbot.util.getEventSlug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,6 +19,7 @@ import com.wrbug.polymarketbot.service.copytrading.configs.CopyTradingFilterServ
 import com.wrbug.polymarketbot.service.copytrading.configs.FilterStatus
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderSigningService
 import com.wrbug.polymarketbot.service.common.BlockchainService
+import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.system.TelegramNotificationService
 import com.wrbug.polymarketbot.util.CryptoUtils
@@ -49,6 +49,7 @@ open class CopyOrderTrackingService(
     private val clobService: PolymarketClobService,
     private val retrofitFactory: RetrofitFactory,
     private val cryptoUtils: CryptoUtils,
+    private val marketService: MarketService,  // 市场信息服务
     private val telegramNotificationService: TelegramNotificationService? = null  // 可选，避免循环依赖
 ) {
 
@@ -269,11 +270,8 @@ open class CopyOrderTrackingService(
                     var marketTitle: String? = null
                     if (copyTrading.keywordFilterMode != null && copyTrading.keywordFilterMode != "DISABLED") {
                         try {
-                            val gammaApi = retrofitFactory.createGammaApi()
-                            val marketResponse = gammaApi.listMarkets(conditionIds = listOf(trade.market))
-                            if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                marketTitle = marketResponse.body()!!.firstOrNull()?.question
-                            }
+                            val market = marketService.getMarket(trade.market)
+                            marketTitle = market?.title
                         } catch (e: Exception) {
                             logger.warn("获取市场标题失败（关键字过滤需要）: ${e.message}", e)
                         }
@@ -300,23 +298,9 @@ open class CopyOrderTrackingService(
                         notificationScope.launch {
                             try {
                                 // 获取市场信息（标题和slug）
-                                val marketInfo = withContext(Dispatchers.IO) {
-                                    try {
-                                        val gammaApi = retrofitFactory.createGammaApi()
-                                        val marketResponse = gammaApi.listMarkets(conditionIds = listOf(trade.market))
-                                        if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                            marketResponse.body()!!.firstOrNull()
-                                        } else {
-                                            null
-                                        }
-                                    } catch (e: Exception) {
-                                        logger.warn("获取市场信息失败: ${e.message}", e)
-                                        null
-                                    }
-                                }
-
-                                val marketTitle = marketInfo?.question ?: trade.market
-                                val marketSlug = marketInfo?.slug  // 显示用的 slug
+                                val market = marketService.getMarket(trade.market)
+                                val marketTitle = market?.title ?: trade.market
+                                val marketSlug = market?.slug  // 显示用的 slug
 
                                 // 从过滤结果中提取 filterType
                                 val filterType = extractFilterType(filterResult.status, filterResult.reason)
@@ -365,7 +349,7 @@ open class CopyOrderTrackingService(
                                 telegramNotificationService?.sendOrderFilteredNotification(
                                     marketTitle = marketTitle,
                                     marketId = trade.market,
-                                    marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
+                                    marketSlug = marketSlug,
                                     side = "BUY",
                                     outcome = trade.outcome,
                                     price = trade.price,
@@ -571,23 +555,9 @@ open class CopyOrderTrackingService(
                             notificationScope.launch {
                                 try {
                                     // 获取市场信息（标题和slug）
-                                    val marketInfo = withContext(Dispatchers.IO) {
-                                        try {
-                                            val gammaApi = retrofitFactory.createGammaApi()
-                                            val marketResponse =
-                                                gammaApi.listMarkets(conditionIds = listOf(trade.market))
-                                            if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                                marketResponse.body()!!.firstOrNull()
-                                            } else {
-                                                null
-                                            }
-                                        } catch (e: Exception) {
-                                            logger.warn("获取市场信息失败: ${e.message}", e)
-                                            null
-                                        }
-                                    }
-
-                                    val marketTitle = marketInfo?.question ?: trade.market
+                                    val market = marketService.getMarket(trade.market)
+                                    val marketTitle = market?.title ?: trade.market
+                                    val marketSlug = market?.eventSlug  // 跳转用的 slug
 
                                     // 获取当前语言设置（从 LocaleContextHolder）
                                     val locale = try {
@@ -599,7 +569,7 @@ open class CopyOrderTrackingService(
                                     telegramNotificationService?.sendOrderFailureNotification(
                                         marketTitle = marketTitle,
                                         marketId = trade.market,
-                                        marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
+                                        marketSlug = marketSlug,
                                         side = "BUY",
                                         outcome = null,  // 失败时可能没有 outcome
                                         price = buyPrice.toString(),
