@@ -23,7 +23,9 @@ enum class FilterStatus {
     /** 失败：超过最大仓位数量 */
     FAILED_MAX_POSITION_COUNT,
     /** 失败：关键字过滤 */
-    FAILED_KEYWORD_FILTER
+    FAILED_KEYWORD_FILTER,
+    /** 失败：市场截止时间超出限制 */
+    FAILED_MARKET_END_DATE
 }
 
 /**
@@ -95,6 +97,12 @@ data class FilterResult(
         /** 关键字过滤失败 */
         fun keywordFilterFailed(reason: String) = FilterResult(
             status = FilterStatus.FAILED_KEYWORD_FILTER,
+            reason = reason
+        )
+        
+        /** 市场截止时间超出限制 */
+        fun marketEndDateFailed(reason: String) = FilterResult(
+            status = FilterStatus.FAILED_MARKET_END_DATE,
             reason = reason
         )
     }

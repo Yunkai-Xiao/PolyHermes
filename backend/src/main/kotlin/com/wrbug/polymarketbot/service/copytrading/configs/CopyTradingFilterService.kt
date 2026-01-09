@@ -35,6 +35,7 @@ class CopyTradingFilterService(
      * @param copyOrderAmount 跟单金额（USDC），用于仓位检查，如果为null则不进行仓位检查
      * @param marketId 市场ID，用于仓位检查（按市场过滤仓位）
      * @param marketTitle 市场标题，用于关键字过滤
+     * @param marketEndDate 市场截止时间，用于市场截止时间检查
      * @return 过滤结果
      */
     suspend fun checkFilters(
@@ -43,13 +44,22 @@ class CopyTradingFilterService(
         tradePrice: BigDecimal? = null,  // Leader 交易价格，用于价格区间检查
         copyOrderAmount: BigDecimal? = null,  // 跟单金额（USDC），用于仓位检查
         marketId: String? = null,  // 市场ID，用于仓位检查（按市场过滤仓位）
-        marketTitle: String? = null  // 市场标题，用于关键字过滤
+        marketTitle: String? = null,  // 市场标题，用于关键字过滤
+        marketEndDate: Long? = null  // 市场截止时间，用于市场截止时间检查
     ): FilterResult {
         // 1. 关键字过滤检查（如果配置了关键字过滤）
         if (copyTrading.keywordFilterMode != null && copyTrading.keywordFilterMode != "DISABLED") {
             val keywordCheck = checkKeywordFilter(copyTrading, marketTitle)
             if (!keywordCheck.isPassed) {
                 return keywordCheck
+            }
+        }
+        
+        // 1.5. 市场截止时间检查（如果配置了市场截止时间限制）
+        if (copyTrading.maxMarketEndDate != null) {
+            val marketEndDateCheck = checkMarketEndDate(copyTrading, marketEndDate)
+            if (!marketEndDateCheck.isPassed) {
+                return marketEndDateCheck
             }
         }
         
@@ -357,6 +367,39 @@ class CopyTradingFilterService(
             // 如果检查异常，为了安全起见，不通过检查
             return FilterResult.maxPositionValueFailed("仓位检查异常: ${e.message}")
         }
+    }
+    
+    /**
+     * 检查市场截止时间
+     * @param copyTrading 跟单配置
+     * @param marketEndDate 市场截止时间（毫秒时间戳）
+     * @return 过滤结果
+     */
+    private fun checkMarketEndDate(
+        copyTrading: CopyTrading,
+        marketEndDate: Long?
+    ): FilterResult {
+        // 如果未配置市场截止时间限制，直接通过
+        if (copyTrading.maxMarketEndDate == null) {
+            return FilterResult.passed()
+        }
+        
+        // 如果没有市场截止时间，无法检查，为了安全起见，不通过
+        if (marketEndDate == null) {
+            return FilterResult.marketEndDateFailed("市场缺少截止时间信息，无法进行市场截止时间检查")
+        }
+        
+        // 检查：市场截止时间 - 当前时间 <= 最大限制时间
+        val currentTime = System.currentTimeMillis()
+        val remainingTime = marketEndDate - currentTime
+        
+        if (remainingTime > copyTrading.maxMarketEndDate) {
+            return FilterResult.marketEndDateFailed(
+                "市场截止时间超出限制: 剩余时间=${remainingTime}ms (${remainingTime / (1000 * 60 * 60)}小时) > 最大限制=${copyTrading.maxMarketEndDate}ms (${copyTrading.maxMarketEndDate / (1000 * 60 * 60)}小时)"
+            )
+        }
+        
+        return FilterResult.passed()
     }
 }
 

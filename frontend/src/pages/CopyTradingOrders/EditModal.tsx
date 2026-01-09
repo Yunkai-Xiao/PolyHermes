@@ -29,6 +29,8 @@ const EditModal: React.FC<EditModalProps> = ({
   const [originalEnabled, setOriginalEnabled] = useState<boolean>(true)
   const [keywords, setKeywords] = useState<string[]>([])
   const keywordInputRef = useRef<InputRef>(null)
+  const [maxMarketEndDateValue, setMaxMarketEndDateValue] = useState<number | undefined>()
+  const [maxMarketEndDateUnit, setMaxMarketEndDateUnit] = useState<'HOUR' | 'DAY'>('HOUR')
   
   useEffect(() => {
     if (open && copyTradingId) {
@@ -46,6 +48,24 @@ const EditModal: React.FC<EditModalProps> = ({
           setCopyTrading(found)
           setCopyMode(found.copyMode)
           setOriginalEnabled(found.enabled)
+          
+          // 解析市场截止时间（毫秒转换为小时或天）
+          if (found.maxMarketEndDate) {
+            const hours = found.maxMarketEndDate / (60 * 60 * 1000)
+            if (hours >= 24 && Number.isInteger(hours / 24)) {
+              // 大于等于24小时且是24的整数倍，使用天作为单位
+              setMaxMarketEndDateUnit('DAY')
+              setMaxMarketEndDateValue(hours / 24)
+            } else {
+              // 使用小时作为单位
+              setMaxMarketEndDateUnit('HOUR')
+              setMaxMarketEndDateValue(hours)
+            }
+          } else {
+            setMaxMarketEndDateValue(undefined)
+            setMaxMarketEndDateUnit('HOUR')
+          }
+          
           form.setFieldsValue({
             accountId: found.accountId,
             leaderId: found.leaderId,
@@ -147,6 +167,15 @@ const EditModal: React.FC<EditModalProps> = ({
       return
     }
     
+    // 计算市场截止时间（毫秒）
+    let maxMarketEndDate: number | undefined
+    if (maxMarketEndDateValue !== undefined && maxMarketEndDateValue > 0) {
+      const multiplier = maxMarketEndDateUnit === 'HOUR' 
+        ? 60 * 60 * 1000  // 小时转毫秒
+        : 24 * 60 * 60 * 1000  // 天转毫秒
+      maxMarketEndDate = maxMarketEndDateValue * multiplier
+    }
+    
     setLoading(true)
     try {
       const request: CopyTradingUpdateRequest = {
@@ -177,7 +206,8 @@ const EditModal: React.FC<EditModalProps> = ({
           ? keywords 
           : undefined,
         configName: values.configName?.trim() || undefined,
-        pushFailedOrders: values.pushFailedOrders
+        pushFailedOrders: values.pushFailedOrders,
+        maxMarketEndDate
       }
       
       const response = await apiService.copyTrading.update(request)
@@ -681,6 +711,51 @@ const EditModal: React.FC<EditModalProps> = ({
                 </>
               )
             }}
+          </Form.Item>
+          
+          {/* 市场截止时间限制 */}
+          <Divider>{t('copyTradingEdit.marketEndDateFilter') || '市场截止时间限制'}</Divider>
+          
+          <Form.Item
+            label={t('copyTradingEdit.maxMarketEndDate') || '最大市场截止时间'}
+            tooltip={t('copyTradingEdit.maxMarketEndDateTooltip') || '仅跟单截止时间小于设定时间的订单。例如：24 小时表示只跟单距离结算还剩24小时以内的市场'}
+          >
+            <Input.Group compact style={{ display: 'flex' }}>
+              <InputNumber
+                min={1}
+                max={9999}
+                step={1}
+                precision={0}
+                value={maxMarketEndDateValue}
+                onChange={(value) => setMaxMarketEndDateValue(value !== null && value !== undefined ? Math.floor(value) : undefined)}
+                style={{ width: '60%' }}
+                placeholder={t('copyTradingEdit.maxMarketEndDatePlaceholder') || '输入时间值（可选）'}
+                parser={(value) => {
+                  if (!value) return ''
+                  const num = parseInt(value.replace(/\D/g, ''), 10)
+                  return isNaN(num) ? '' : num.toString()
+                }}
+                formatter={(value) => {
+                  if (!value && value !== 0) return ''
+                  return Math.floor(value).toString()
+                }}
+              />
+              <Select
+                value={maxMarketEndDateUnit}
+                onChange={(value) => setMaxMarketEndDateUnit(value)}
+                style={{ width: '40%' }}
+                placeholder={t('copyTradingEdit.timeUnit') || '单位'}
+              >
+                <Option value="HOUR">{t('copyTradingEdit.hour') || '小时'}</Option>
+                <Option value="DAY">{t('copyTradingEdit.day') || '天'}</Option>
+              </Select>
+            </Input.Group>
+          </Form.Item>
+          
+          <Form.Item style={{ marginBottom: 0 }}>
+            <div style={{ fontSize: 12, color: '#999' }}>
+              {t('copyTradingEdit.maxMarketEndDateNote') || '💡 说明：不填写表示不启用此限制'}
+            </div>
           </Form.Item>
           
           <Divider>{t('copyTradingEdit.advancedSettings') || '高级设置'}</Divider>

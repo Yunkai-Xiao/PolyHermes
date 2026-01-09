@@ -48,6 +48,9 @@ data class Market(
     @Column(name = "archived", nullable = false)
     val archived: Boolean = false,  // 是否已归档
     
+    @Column(name = "end_date")
+    val endDate: Long? = null,  // 市场截止时间（毫秒时间戳）
+    
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
     

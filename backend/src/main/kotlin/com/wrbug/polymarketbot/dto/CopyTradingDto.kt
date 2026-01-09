@@ -42,7 +42,8 @@ data class CopyTradingCreateRequest(
     val keywords: List<String>? = null,  // 关键字列表，当keywordFilterMode为DISABLED时为null
     // 新增配置字段
     val configName: String? = null,  // 配置名（可选）
-    val pushFailedOrders: Boolean? = null  // 推送失败订单（可选）
+    val pushFailedOrders: Boolean? = null,  // 推送失败订单（可选）
+    val maxMarketEndDate: Long? = null  // 市场截止时间限制（毫秒时间戳），仅跟单截止时间小于此时间的订单，NULL表示不启用
 )
 
 /**
@@ -79,7 +80,8 @@ data class CopyTradingUpdateRequest(
     val keywords: List<String>? = null,  // 关键字列表，当keywordFilterMode为DISABLED时为null
     // 新增配置字段
     val configName: String? = null,  // 配置名（可选，但提供时必须非空）
-    val pushFailedOrders: Boolean? = null  // 推送失败订单（可选）
+    val pushFailedOrders: Boolean? = null,  // 推送失败订单（可选）
+    val maxMarketEndDate: Long? = null  // 市场截止时间限制（毫秒时间戳），仅跟单截止时间小于此时间的订单，NULL表示不启用
 )
 
 /**
@@ -154,6 +156,7 @@ data class CopyTradingDto(
     // 新增配置字段
     val configName: String? = null,  // 配置名（可选）
     val pushFailedOrders: Boolean = false,  // 推送失败订单（默认关闭）
+    val maxMarketEndDate: Long? = null,  // 市场截止时间限制（毫秒时间戳），仅跟单截止时间小于此时间的订单，NULL表示不启用
     val createdAt: Long,
     val updatedAt: Long
 )

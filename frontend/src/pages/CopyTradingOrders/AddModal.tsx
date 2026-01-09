@@ -34,6 +34,8 @@ const AddModal: React.FC<AddModalProps> = ({
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
   const [keywords, setKeywords] = useState<string[]>([])
   const keywordInputRef = useRef<InputRef>(null)
+  const [maxMarketEndDateValue, setMaxMarketEndDateValue] = useState<number | undefined>()
+  const [maxMarketEndDateUnit, setMaxMarketEndDateUnit] = useState<'HOUR' | 'DAY'>('HOUR')
   
   // 导入账户modal相关状态
   const [accountImportModalVisible, setAccountImportModalVisible] = useState(false)
@@ -198,7 +200,7 @@ const AddModal: React.FC<AddModalProps> = ({
     setKeywords(newKeywords)
   }
   
-  const handleSubmit = async (values: any) => {
+    const handleSubmit = async (values: any) => {
     // 前端校验
     if (values.copyMode === 'FIXED') {
       if (!values.fixedAmount || Number(values.fixedAmount) < 1) {
@@ -210,6 +212,15 @@ const AddModal: React.FC<AddModalProps> = ({
     if (values.copyMode === 'RATIO' && values.minOrderSize !== undefined && values.minOrderSize !== null && Number(values.minOrderSize) < 1) {
       message.error(t('copyTradingAdd.minOrderSizeMin') || '最小金额必须 >= 1')
       return
+    }
+    
+    // 计算市场截止时间（毫秒）
+    let maxMarketEndDate: number | undefined
+    if (maxMarketEndDateValue !== undefined && maxMarketEndDateValue > 0) {
+      const multiplier = maxMarketEndDateUnit === 'HOUR' 
+        ? 60 * 60 * 1000  // 小时转毫秒
+        : 24 * 60 * 60 * 1000  // 天转毫秒
+      maxMarketEndDate = maxMarketEndDateValue * multiplier
     }
     
     setLoading(true)
@@ -243,7 +254,8 @@ const AddModal: React.FC<AddModalProps> = ({
           ? keywords 
           : undefined,
         configName: values.configName?.trim(),
-        pushFailedOrders: values.pushFailedOrders ?? false
+        pushFailedOrders: values.pushFailedOrders ?? false,
+        maxMarketEndDate
       }
       
       const response = await apiService.copyTrading.create(request)
@@ -781,6 +793,51 @@ const AddModal: React.FC<AddModalProps> = ({
                 </>
               )
             }}
+          </Form.Item>
+          
+          {/* 市场截止时间限制 */}
+          <Divider>{t('copyTradingAdd.marketEndDateFilter') || '市场截止时间限制'}</Divider>
+          
+          <Form.Item
+            label={t('copyTradingAdd.maxMarketEndDate') || '最大市场截止时间'}
+            tooltip={t('copyTradingAdd.maxMarketEndDateTooltip') || '仅跟单截止时间小于设定时间的订单。例如：24 小时表示只跟单距离结算还剩24小时以内的市场'}
+          >
+            <Input.Group compact style={{ display: 'flex' }}>
+              <InputNumber
+                min={1}
+                max={9999}
+                step={1}
+                precision={0}
+                value={maxMarketEndDateValue}
+                onChange={(value) => setMaxMarketEndDateValue(value !== null && value !== undefined ? Math.floor(value) : undefined)}
+                style={{ width: '60%' }}
+                placeholder={t('copyTradingAdd.maxMarketEndDatePlaceholder') || '输入时间值（可选）'}
+                parser={(value) => {
+                  if (!value) return ''
+                  const num = parseInt(value.replace(/\D/g, ''), 10)
+                  return isNaN(num) ? '' : num.toString()
+                }}
+                formatter={(value) => {
+                  if (!value && value !== 0) return ''
+                  return Math.floor(value).toString()
+                }}
+              />
+              <Select
+                value={maxMarketEndDateUnit}
+                onChange={(value) => setMaxMarketEndDateUnit(value)}
+                style={{ width: '40%' }}
+                placeholder={t('copyTradingAdd.timeUnit') || '单位'}
+              >
+                <Option value="HOUR">{t('copyTradingAdd.hour') || '小时'}</Option>
+                <Option value="DAY">{t('copyTradingAdd.day') || '天'}</Option>
+              </Select>
+            </Input.Group>
+          </Form.Item>
+          
+          <Form.Item style={{ marginBottom: 0 }}>
+            <div style={{ fontSize: 12, color: '#999' }}>
+              {t('copyTradingAdd.maxMarketEndDateNote') || '💡 说明：不填写表示不启用此限制'}
+            </div>
           </Form.Item>
           
           <Divider>{t('copyTradingAdd.advancedSettings') || '高级设置'}</Divider>

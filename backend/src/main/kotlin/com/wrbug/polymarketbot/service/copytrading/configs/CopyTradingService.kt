@@ -94,7 +94,8 @@ class CopyTradingService(
                     maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
                     maxPositionCount = request.maxPositionCount,
                     keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
-                    keywords = convertKeywordsToJson(request.keywords)
+                    keywords = convertKeywordsToJson(request.keywords),
+                    maxMarketEndDate = request.maxMarketEndDate
                 )
             } else {
                 // 手动输入（所有字段必须提供）
@@ -124,7 +125,8 @@ class CopyTradingService(
                     maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
                     maxPositionCount = request.maxPositionCount,
                     keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
-                    keywords = convertKeywordsToJson(request.keywords)
+                    keywords = convertKeywordsToJson(request.keywords),
+                    maxMarketEndDate = request.maxMarketEndDate
                 )
             }
             
@@ -156,7 +158,8 @@ class CopyTradingService(
                 keywordFilterMode = config.keywordFilterMode,
                 keywords = config.keywords,
                 configName = configName,
-                pushFailedOrders = request.pushFailedOrders ?: false
+                pushFailedOrders = request.pushFailedOrders ?: false,
+                maxMarketEndDate = config.maxMarketEndDate
             )
             
             val saved = copyTradingRepository.save(copyTrading)
@@ -233,6 +236,7 @@ class CopyTradingService(
                 },
                 configName = configName,
                 pushFailedOrders = request.pushFailedOrders ?: copyTrading.pushFailedOrders,
+                maxMarketEndDate = request.maxMarketEndDate ?: copyTrading.maxMarketEndDate,
                 updatedAt = System.currentTimeMillis()
             )
             
@@ -446,6 +450,7 @@ class CopyTradingService(
             keywords = convertJsonToKeywords(copyTrading.keywords),
             configName = copyTrading.configName,
             pushFailedOrders = copyTrading.pushFailedOrders,
+            maxMarketEndDate = copyTrading.maxMarketEndDate,
             createdAt = copyTrading.createdAt,
             updatedAt = copyTrading.updatedAt
         )
@@ -506,6 +511,7 @@ class CopyTradingService(
         val maxPositionValue: BigDecimal?,
         val maxPositionCount: Int?,
         val keywordFilterMode: String,
-        val keywords: String?  // JSON 字符串
+        val keywords: String?,  // JSON 字符串
+        val maxMarketEndDate: Long?  // 市场截止时间限制（毫秒时间戳）
     )
 }

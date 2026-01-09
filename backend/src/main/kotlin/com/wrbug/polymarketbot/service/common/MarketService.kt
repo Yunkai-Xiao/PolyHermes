@@ -11,6 +11,8 @@ import com.wrbug.polymarketbot.util.getEventSlug
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 /**
  * 市场信息服务
@@ -173,6 +175,7 @@ class MarketService(
                     active = marketResponse.active ?: existingMarket.active,
                     closed = marketResponse.closed ?: existingMarket.closed,
                     archived = marketResponse.archived ?: existingMarket.archived,
+                    endDate = parseEndDate(marketResponse.endDate),
                     updatedAt = System.currentTimeMillis()
                 )
             } else {
@@ -189,6 +192,7 @@ class MarketService(
                     active = marketResponse.active ?: true,
                     closed = marketResponse.closed ?: false,
                     archived = marketResponse.archived ?: false,
+                    endDate = parseEndDate(marketResponse.endDate),
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
@@ -208,6 +212,23 @@ class MarketService(
      */
     fun clearCache() {
         marketCache.invalidateAll()
+    }
+    
+    /**
+     * 解析市场截止时间（ISO 8601 格式）
+     */
+    private fun parseEndDate(endDate: String?): Long? {
+        if (endDate.isNullOrBlank()) {
+            return null
+        }
+        
+        return try {
+            // ISO 8601 格式，例如：2025-03-15T12:00:00Z
+            Instant.parse(endDate).toEpochMilli()
+        } catch (e: Exception) {
+            logger.warn("解析市场截止时间失败: endDate=$endDate, error=${e.message}")
+            null
+        }
     }
 }
 

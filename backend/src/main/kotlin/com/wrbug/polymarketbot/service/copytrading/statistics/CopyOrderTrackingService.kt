@@ -266,14 +266,18 @@ open class CopyOrderTrackingService(
                     // 计算跟单金额（USDC）= 买入数量 × 价格
                     val copyOrderAmount = buyQuantity.multi(tradePrice)
 
-                    // 如果启用了关键字过滤，需要先获取市场标题
+                    // 如果启用了关键字过滤或市场截止时间过滤，需要先获取市场信息
                     var marketTitle: String? = null
-                    if (copyTrading.keywordFilterMode != null && copyTrading.keywordFilterMode != "DISABLED") {
+                    var marketEndDate: Long? = null
+                    val needMarketInfo = copyTrading.keywordFilterMode != "DISABLED" || copyTrading.maxMarketEndDate != null
+                    
+                    if (needMarketInfo) {
                         try {
                             val market = marketService.getMarket(trade.market)
                             marketTitle = market?.title
+                            marketEndDate = market?.endDate
                         } catch (e: Exception) {
-                            logger.warn("获取市场标题失败（关键字过滤需要）: ${e.message}", e)
+                            logger.warn("获取市场信息失败（关键字过滤/市场截止时间检查需要）: ${e.message}", e)
                         }
                     }
 
@@ -281,6 +285,7 @@ open class CopyOrderTrackingService(
                     // 传入 Leader 交易价格，用于价格区间检查
                     // 传入跟单金额和市场ID，用于仓位检查（按市场检查仓位）
                     // 传入市场标题，用于关键字过滤
+                    // 传入市场截止时间，用于市场截止时间检查
                     // 订单簿只请求一次，返回给后续逻辑使用
                     val filterResult = filterService.checkFilters(
                         copyTrading,
@@ -288,7 +293,8 @@ open class CopyOrderTrackingService(
                         tradePrice = tradePrice,
                         copyOrderAmount = copyOrderAmount,
                         marketId = trade.market,
-                        marketTitle = marketTitle
+                        marketTitle = marketTitle,
+                        marketEndDate = marketEndDate
                     )
                     val orderbook = filterResult.orderbook  // 获取订单簿（如果需要）
                     if (!filterResult.isPassed) {
@@ -1403,6 +1409,7 @@ open class CopyOrderTrackingService(
             FilterStatus.FAILED_MAX_POSITION_VALUE -> "MAX_POSITION_VALUE"
             FilterStatus.FAILED_MAX_POSITION_COUNT -> "MAX_POSITION_COUNT"
             FilterStatus.FAILED_KEYWORD_FILTER -> "KEYWORD_FILTER"
+            FilterStatus.FAILED_MARKET_END_DATE -> "MARKET_END_DATE"
         }
     }
 
