@@ -8,12 +8,7 @@ import com.wrbug.polymarketbot.util.toSafeBigDecimal
  * 跟单配置实体（独立配置，不再绑定模板）
  */
 @Entity
-@Table(
-    name = "copy_trading",
-    uniqueConstraints = [
-        UniqueConstraint(columnNames = ["account_id", "leader_id"])
-    ]
-)
+@Table(name = "copy_trading")
 data class CopyTrading(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

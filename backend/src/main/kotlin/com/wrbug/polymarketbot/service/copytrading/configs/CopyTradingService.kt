@@ -50,16 +50,7 @@ class CopyTradingService(
             val leader = leaderRepository.findById(request.leaderId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException("Leader 不存在"))
             
-            // 3. 检查是否已存在相同的跟单关系（accountId + leaderId）
-            val existing = copyTradingRepository.findByAccountIdAndLeaderId(
-                request.accountId,
-                request.leaderId
-            )
-            if (existing != null) {
-                return Result.failure(IllegalArgumentException("该跟单关系已存在"))
-            }
-            
-            // 4. 验证配置名（强校验：不能为空字符串）
+            // 3. 验证配置名（强校验：不能为空字符串）
             val configName = request.configName?.trim()
             if (configName.isNullOrBlank()) {
                 return Result.failure(IllegalArgumentException("配置名不能为空"))
@@ -286,11 +277,10 @@ class CopyTradingService(
         return try {
             val copyTradings = when {
                 request.accountId != null && request.leaderId != null -> {
-                    val found = copyTradingRepository.findByAccountIdAndLeaderId(
+                    copyTradingRepository.findByAccountIdAndLeaderId(
                         request.accountId,
                         request.leaderId
                     )
-                    if (found != null) listOf(found) else emptyList()
                 }
                 request.accountId != null -> {
                     copyTradingRepository.findByAccountId(request.accountId)
