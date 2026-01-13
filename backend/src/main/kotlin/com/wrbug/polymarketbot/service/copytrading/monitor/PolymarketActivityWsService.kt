@@ -7,11 +7,11 @@ import com.wrbug.polymarketbot.entity.Leader
 import com.wrbug.polymarketbot.repository.LeaderRepository
 import com.wrbug.polymarketbot.service.copytrading.statistics.CopyOrderTrackingService
 import com.wrbug.polymarketbot.util.fromJson
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.websocket.PolymarketWebSocketClient
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.util.concurrent.ConcurrentHashMap
@@ -29,8 +29,7 @@ class PolymarketActivityWsService(
 
     private val logger = LoggerFactory.getLogger(PolymarketActivityWsService::class.java)
 
-    @Value("\${polymarket.websocket.activity.url:wss://ws-live-data.polymarket.com}")
-    private var websocketUrl: String = "wss://ws-live-data.polymarket.com"
+    private val websocketUrl: String = PolymarketConstants.ACTIVITY_WS_URL
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -43,6 +42,13 @@ class PolymarketActivityWsService(
     // 是否已订阅
     @Volatile
     private var isSubscribed = false
+
+    // 最后一次收到 activity 消息的时间（毫秒时间戳）
+    @Volatile
+    private var lastActivityTime: Long = 0
+
+    // Activity 消息超时检测任务
+    private var activityTimeoutJob: Job? = null
 
     /**
      * 启动监听
@@ -184,11 +190,63 @@ class PolymarketActivityWsService(
 
             client.sendMessage(subscribeMessage)
             isSubscribed = true
+            // 重置最后一次收到 activity 消息的时间
+            lastActivityTime = System.currentTimeMillis()
+            // 启动 Activity 消息超时检测
+            startActivityTimeoutCheck()
             logger.info("Activity WebSocket 订阅成功（全局交易流）")
         } catch (e: Exception) {
             logger.error("订阅 Activity WebSocket 失败", e)
             isSubscribed = false
         }
+    }
+
+    /**
+     * 启动 Activity 消息超时检测
+     * 每30秒检查一次，如果超过30秒没有收到activity消息，则重连
+     */
+    private fun startActivityTimeoutCheck() {
+        // 先停止之前的检测任务
+        stopActivityTimeoutCheck()
+        
+        activityTimeoutJob = scope.launch {
+            while (isActive && isSubscribed) {
+                delay(30000)  // 每30秒检查一次
+                
+                // 如果已经取消订阅，停止检测
+                if (!isSubscribed) {
+                    break
+                }
+                
+                // 如果 lastActivityTime 为 0，说明还没有收到过消息，跳过本次检测
+                if (lastActivityTime == 0L) {
+                    continue
+                }
+                
+                val currentTime = System.currentTimeMillis()
+                val timeSinceLastActivity = currentTime - lastActivityTime
+                
+                // 如果超过30秒没有收到activity消息，触发重连
+                if (timeSinceLastActivity >= 30000) {
+                    logger.warn("超过30秒未收到 Activity 消息，触发重连。距离上次消息: ${timeSinceLastActivity}ms")
+                    // 关闭当前连接并重连
+                    wsClient?.closeConnection()
+                    wsClient = null
+                    isSubscribed = false
+                    // 重新连接
+                    connectAndSubscribe()
+                    break  // 重连后会重新启动检测任务
+                }
+            }
+        }
+    }
+    
+    /**
+     * 停止 Activity 消息超时检测
+     */
+    private fun stopActivityTimeoutCheck() {
+        activityTimeoutJob?.cancel()
+        activityTimeoutJob = null
     }
 
     /**
@@ -213,6 +271,9 @@ class PolymarketActivityWsService(
                 // 不是我们关心的消息，直接返回
                 return
             }
+            
+            // 更新最后一次收到 activity 消息的时间（即使不是我们监听的 Leader 的交易）
+            lastActivityTime = System.currentTimeMillis()
             
             val payload = tradeMessage.payload
             
@@ -383,10 +444,12 @@ class PolymarketActivityWsService(
      */
     fun stop() {
         logger.info("停止 Activity WebSocket 监听")
+        stopActivityTimeoutCheck()
         wsClient?.closeConnection()
         wsClient = null
         isSubscribed = false
         monitoredAddresses.clear()
+        lastActivityTime = 0
     }
 
     /**
