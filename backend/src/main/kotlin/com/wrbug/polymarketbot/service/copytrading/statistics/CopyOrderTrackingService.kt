@@ -140,7 +140,7 @@ open class CopyOrderTrackingService(
 
                 // 2. 处理交易逻辑
                 val result = when (trade.side.uppercase()) {
-                    "BUY" -> processBuyTrade(leaderId, trade)
+                    "BUY" -> processBuyTrade(leaderId, trade, source)
                     "SELL" -> processSellTrade(leaderId, trade)
                     else -> {
                         logger.warn("未知的交易方向: ${trade.side}")
@@ -213,7 +213,7 @@ open class CopyOrderTrackingService(
      * 创建跟单买入订单并记录到跟踪表
      */
     @Transactional
-    suspend fun processBuyTrade(leaderId: Long, trade: TradeResponse): Result<Unit> {
+    suspend fun processBuyTrade(leaderId: Long, trade: TradeResponse, source: String): Result<Unit> {
         return try {
             // 1. 查找所有启用且支持该Leader的跟单关系
             val copyTradings = copyTradingRepository.findByLeaderIdAndEnabledTrue(leaderId)
@@ -622,7 +622,8 @@ open class CopyOrderTrackingService(
                         price = buyPrice,  // 使用下单价格，临时值
                         remainingQuantity = finalBuyQuantity,
                         status = "filled",
-                        notificationSent = false  // 标记为未发送通知，等待轮询任务获取实际数据后发送
+                        notificationSent = false,  // 标记为未发送通知，等待轮询任务获取实际数据后发送
+                        source = source  // 订单来源
                     )
 
                     copyOrderTrackingRepository.save(tracking)

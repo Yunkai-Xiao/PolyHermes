@@ -213,7 +213,7 @@ class CopyTradingWebSocketService(
                 // 处理交易
                 scope.launch {
                     try {
-                        copyOrderTrackingService.processTrade(leaderId, trade, "websocket")
+                        copyOrderTrackingService.processTrade(leaderId, trade, "activity-ws")
                     } catch (e: Exception) {
                         logger.error("处理交易失败: leaderId=$leaderId, tradeId=${trade.id}", e)
                     }

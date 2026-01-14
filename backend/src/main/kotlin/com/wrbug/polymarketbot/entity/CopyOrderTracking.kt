@@ -58,7 +58,10 @@ data class CopyOrderTracking(
     
     @Column(name = "notification_sent", nullable = false)
     var notificationSent: Boolean = false,  // 是否已发送通知（从订单详情获取实际数据后发送）
-    
+
+    @Column(name = "source", nullable = false, length = 20)
+    val source: String,  // 订单来源：activity-ws（Polymarket WebSocket）、onchain-ws（OnChain WebSocket）
+
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
     
