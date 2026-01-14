@@ -611,22 +611,22 @@ class CopyTradingStatisticsService(
             
             // 4. 转换为分组数据并计算统计信息
             val marketIds = groups.keys.toList()
-            
+
             val list = marketIds.map { marketId ->
                 val marketOrders = groups[marketId] ?: mutableListOf()
-                
+
                 // 计算统计信息
                 val count = marketOrders.size.toLong()
                 val totalAmount = marketOrders.sumOf { order ->
                     order.quantity.toSafeBigDecimal().multi(order.price)
                 }
-                
+
                 // 计算订单状态统计
                 val fullyMatchedCount = marketOrders.count { it.status == "fully_matched" }
                 val partiallyMatchedCount = marketOrders.count { it.status == "partially_matched" }
                 val filledCount = marketOrders.count { it.status == "filled" }
                 val fullyMatched = fullyMatchedCount == marketOrders.size
-                
+
                 val stats = MarketOrderStats(
                     count = count,
                     totalAmount = totalAmount.toString(),
@@ -636,10 +636,10 @@ class CopyTradingStatisticsService(
                     partiallyMatchedCount = partiallyMatchedCount.toLong(),
                     filledCount = filledCount.toLong()
                 )
-                
+
                 // 排序（按创建时间倒序）
                 marketOrders.sortByDescending { it.createdAt }
-                
+
                 // 转换为 DTO
                 val orderDtos = marketOrders.map { order ->
                     val amount = order.quantity.toSafeBigDecimal().multi(order.price)
@@ -662,7 +662,7 @@ class CopyTradingStatisticsService(
                         createdAt = order.createdAt
                     )
                 }
-                
+
                 MarketOrderGroup(
                     marketId = marketId,
                     marketTitle = markets[marketId]?.title,
@@ -672,27 +672,35 @@ class CopyTradingStatisticsService(
                     stats = stats,
                     orders = orderDtos as List<Any>
                 )
-            }.sortedByDescending { it.stats.count }
-            
+            }.sortedByDescending { group ->
+                // 找出该市场最近的买入订单时间
+                group.orders.mapNotNull { order ->
+                    when (order) {
+                        is BuyOrderInfo -> order.createdAt
+                        else -> null
+                    }
+                }.maxOrNull() ?: 0L
+            }
+
             // 5. 分页
             val page = (request.page ?: 1)
             val limit = request.limit ?: 20
             val total = list.size.toLong()
-            
+
             val start = (page - 1) * limit
             val end = minOf(start + limit, list.size)
             val pagedList = if (start < list.size) list.subList(start, end) else emptyList()
-            
+
             val response = MarketGroupedOrdersResponse(
                 list = pagedList,
                 total = total,
                 page = page,
                 limit = limit
             )
-            
+
             Result.success(response)
         } catch (e: Exception) {
-            logger.error("获取按市场分组的买入订单列表失败: copyTradingId=${request.copyTradingId}", e)
+            logger.error("获取按市场分组的卖出订单列表失败: copyTradingId=${request.copyTradingId}", e)
             Result.failure(e)
         }
     }

@@ -49,6 +49,9 @@ class OrderStatusUpdateService(
     // 订单详情为 null 的重试时间窗口（1分钟）
     private val ORDER_NULL_RETRY_WINDOW_MS = 60000L
     
+    // 订单详情为 null 但已部分卖出的清理时间窗口（1小时）
+    private val PARTIAL_SOLD_CLEANUP_WINDOW_MS = 3600000L
+    
     @EventListener(ApplicationReadyEvent::class)
     fun onApplicationReady() {
         logger.info("订单状态更新服务已启动，将每5秒轮询一次")
@@ -234,10 +237,25 @@ class OrderStatusUpdateService(
                                 // 检查订单是否已部分卖出，如果已部分卖出则保留订单用于统计
                                 val hasMatchedDetails = sellMatchDetailRepository.findByTrackingId(order.id!!).isNotEmpty()
                                 if (hasMatchedDetails || order.matchedQuantity > BigDecimal.ZERO) {
-                                    logger.debug("订单详情为 null 但已部分卖出，保留订单用于统计: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, matchedQuantity=${order.matchedQuantity}")
-                                    // 清除缓存，下次重新检测
-                                    orderNullDetectionTime.remove(order.buyOrderId)
-                                    continue
+                                    // 检查是否超过清理时间窗口（1小时）
+                                    val orderAge = currentTime - order.createdAt
+                                    if (orderAge >= PARTIAL_SOLD_CLEANUP_WINDOW_MS) {
+                                        logger.warn("订单详情为 null 且已部分卖出，但超过清理时间窗口，删除本地订单: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, matchedQuantity=${order.matchedQuantity}, 已等待=${orderAge / 1000}s")
+                                        try {
+                                            copyOrderTrackingRepository.deleteById(order.id!!)
+                                            logger.info("已删除本地订单（超时清理）: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
+                                            // 清除缓存
+                                            orderNullDetectionTime.remove(order.buyOrderId)
+                                        } catch (e: Exception) {
+                                            logger.error("删除本地订单失败: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, error=${e.message}", e)
+                                        }
+                                        continue
+                                    } else {
+                                        logger.debug("订单详情为 null 但已部分卖出，保留订单用于统计: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, matchedQuantity=${order.matchedQuantity}, 已等待=${orderAge / 1000}s")
+                                        // 清除缓存，下次重新检测
+                                        orderNullDetectionTime.remove(order.buyOrderId)
+                                        continue
+                                    }
                                 }
                                 
                                 // 检查是否超过重试时间窗口
@@ -645,10 +663,25 @@ class OrderStatusUpdateService(
                         // 检查订单是否已部分卖出，如果已部分卖出则保留订单用于统计
                         val hasMatchedDetails = sellMatchDetailRepository.findByTrackingId(order.id!!).isNotEmpty()
                         if (hasMatchedDetails || order.matchedQuantity > BigDecimal.ZERO) {
-                            logger.debug("订单详情为 null 但已部分卖出，保留订单用于统计: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, matchedQuantity=${order.matchedQuantity}")
-                            // 清除缓存，下次重新检测
-                            orderNullDetectionTime.remove(order.buyOrderId)
-                            continue
+                            // 检查是否超过清理时间窗口（1小时）
+                            val orderAge = currentTime - order.createdAt
+                            if (orderAge >= PARTIAL_SOLD_CLEANUP_WINDOW_MS) {
+                                logger.warn("订单详情为 null 且已部分卖出，但超过清理时间窗口，删除本地订单: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, matchedQuantity=${order.matchedQuantity}, 已等待=${orderAge / 1000}s")
+                                try {
+                                    copyOrderTrackingRepository.deleteById(order.id!!)
+                                    logger.info("已删除本地订单（超时清理）: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
+                                    // 清除缓存
+                                    orderNullDetectionTime.remove(order.buyOrderId)
+                                } catch (e: Exception) {
+                                    logger.error("删除本地订单失败: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, error=${e.message}", e)
+                                }
+                                continue
+                            } else {
+                                logger.debug("订单详情为 null 但已部分卖出，保留订单用于统计: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, matchedQuantity=${order.matchedQuantity}, 已等待=${orderAge / 1000}s")
+                                // 清除缓存，下次重新检测
+                                orderNullDetectionTime.remove(order.buyOrderId)
+                                continue
+                            }
                         }
                         
                         // 检查是否超过重试时间窗口
