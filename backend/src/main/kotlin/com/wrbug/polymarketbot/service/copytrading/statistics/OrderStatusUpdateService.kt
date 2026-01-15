@@ -12,6 +12,8 @@ import com.wrbug.polymarketbot.util.multi
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.ApplicationContext
+import org.springframework.context.ApplicationContextAware
 import org.springframework.context.event.EventListener
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.scheduling.annotation.Scheduled
@@ -37,11 +39,29 @@ class OrderStatusUpdateService(
     private val trackingService: CopyOrderTrackingService,
     private val marketService: MarketService,  // 市场信息服务
     private val telegramNotificationService: TelegramNotificationService?
-) {
+) : ApplicationContextAware {
 
     private val logger = LoggerFactory.getLogger(OrderStatusUpdateService::class.java)
 
     private val updateScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    // 跟踪上一次更新任务的 Job，防止并发执行
+    @Volatile
+    private var updateJob: Job? = null
+    
+    private var applicationContext: ApplicationContext? = null
+    
+    override fun setApplicationContext(applicationContext: ApplicationContext) {
+        this.applicationContext = applicationContext
+    }
+    
+    /**
+     * 获取代理对象，用于解决 @Transactional 自调用问题
+     */
+    private fun getSelf(): OrderStatusUpdateService {
+        return applicationContext?.getBean(OrderStatusUpdateService::class.java)
+            ?: throw IllegalStateException("ApplicationContext not initialized")
+    }
 
     // 缓存首次检测到订单详情为 null 的时间戳（订单ID -> 首次检测时间）
     private val orderNullDetectionTime = ConcurrentHashMap<String, Long>()
@@ -60,24 +80,38 @@ class OrderStatusUpdateService(
     /**
      * 定时更新订单状态
      * 每5秒执行一次
+     * 如果上一次任务还在执行，则跳过本次执行，避免并发问题
      */
     @Scheduled(fixedDelay = 5000)
     fun updateOrderStatus() {
-        updateScope.launch {
+        // 检查上一次任务是否还在执行
+        val previousJob = updateJob
+        if (previousJob != null && previousJob.isActive) {
+            logger.debug("上一次订单状态更新任务还在执行，跳过本次执行")
+            return
+        }
+        
+        // 启动新任务并记录 Job
+        updateJob = updateScope.launch {
             try {
-                // 1. 清理已删除账户的订单
-                cleanupDeletedAccountOrders()
+                val self = getSelf()
+                
+                // 1. 清理已删除账户的订单（通过代理对象调用，确保事务生效）
+                self.cleanupDeletedAccountOrders()
 
-                // 2. 检查30秒前创建的订单，如果未成交则删除
-                checkAndDeleteUnfilledOrders()
+                // 2. 检查30秒前创建的订单，如果未成交则删除（通过代理对象调用，确保事务生效）
+                self.checkAndDeleteUnfilledOrders()
 
-                // 3. 更新卖出订单的实际成交价并发送通知（priceUpdated 共用字段）
-                updatePendingSellOrderPrices()
+                // 3. 更新卖出订单的实际成交价并发送通知（priceUpdated 共用字段）（通过代理对象调用，确保事务生效）
+                self.updatePendingSellOrderPrices()
 
-                // 4. 更新买入订单的实际数据并发送通知
-                updatePendingBuyOrders()
+                // 4. 更新买入订单的实际数据并发送通知（通过代理对象调用，确保事务生效）
+                self.updatePendingBuyOrders()
             } catch (e: Exception) {
                 logger.error("订单状态更新异常: ${e.message}", e)
+            } finally {
+                // 任务完成后清除 Job 引用
+                updateJob = null
             }
         }
     }
