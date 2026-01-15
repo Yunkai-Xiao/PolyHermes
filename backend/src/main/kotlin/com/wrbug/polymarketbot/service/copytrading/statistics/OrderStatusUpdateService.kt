@@ -106,7 +106,7 @@ class OrderStatusUpdateService(
      * 清理已删除账户的订单
      */
     @Transactional
-    private suspend fun cleanupDeletedAccountOrders() {
+    suspend fun cleanupDeletedAccountOrders() {
         try {
             // 查询所有卖出记录
             val allRecords = sellMatchRecordRepository.findAll()
@@ -150,7 +150,7 @@ class OrderStatusUpdateService(
      * 首次检测但加入缓存中30s后还没有成交，则删除
      */
     @Transactional
-    private suspend fun checkAndDeleteUnfilledOrders() {
+    suspend fun checkAndDeleteUnfilledOrders() {
         try {
             // 计算30秒前的时间戳
             val thirtySecondsAgo = System.currentTimeMillis() - 30000
@@ -323,7 +323,7 @@ class OrderStatusUpdateService(
      * 注意：priceUpdated 现在同时表示价格已更新和通知已发送（共用字段）
      */
     @Transactional
-    private suspend fun updatePendingSellOrderPrices() {
+    suspend fun updatePendingSellOrderPrices() {
         try {
             // 查询所有价格未更新的卖出记录（priceUpdated = false 表示未处理）
             val pendingRecords = sellMatchRecordRepository.findByPriceUpdatedFalse()
@@ -566,7 +566,7 @@ class OrderStatusUpdateService(
      * 查询订单详情获取实际价格和数量，然后发送通知并更新数据库
      */
     @Transactional
-    private suspend fun updatePendingBuyOrders() {
+    suspend fun updatePendingBuyOrders() {
         try {
             // 查询所有未发送通知的买入订单
             val pendingOrders = copyOrderTrackingRepository.findByNotificationSentFalse()
