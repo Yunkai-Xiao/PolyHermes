@@ -269,6 +269,43 @@ class OrderStatusUpdateService(
                                     orderNullDetectionTime.getOrPut(order.buyOrderId) { System.currentTimeMillis() }
                                 val currentTime = System.currentTimeMillis()
 
+                                // 检查订单是否已经通过订单详情更正过数据并发送过通知
+                                if (order.notificationSent) {
+                                    // 检查是否超过重试时间窗口
+                                    if (currentTime - firstDetectionTime >= ORDER_NULL_RETRY_WINDOW_MS) {
+                                        // 超过60秒，将订单状态改为 fully_matched，不再查询
+                                        logger.info("订单已发送通知且详情为 null 超过60秒，标记为 fully_matched: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
+                                        try {
+                                            val updatedOrder = CopyOrderTracking(
+                                                id = order.id,
+                                                copyTradingId = order.copyTradingId,
+                                                accountId = order.accountId,
+                                                leaderId = order.leaderId,
+                                                marketId = order.marketId,
+                                                side = order.side,
+                                                outcomeIndex = order.outcomeIndex,
+                                                buyOrderId = order.buyOrderId,
+                                                leaderBuyTradeId = order.leaderBuyTradeId,
+                                                quantity = order.quantity,
+                                                price = order.price,
+                                                matchedQuantity = order.matchedQuantity,
+                                                remainingQuantity = order.remainingQuantity,
+                                                status = "fully_matched",  // 标记为完全匹配
+                                                notificationSent = order.notificationSent,
+                                                source = order.source,
+                                                createdAt = order.createdAt,
+                                                updatedAt = System.currentTimeMillis()
+                                            )
+                                            copyOrderTrackingRepository.save(updatedOrder)
+                                        } catch (e: Exception) {
+                                            logger.error("更新订单状态失败: orderId=${order.buyOrderId}, error=${e.message}", e)
+                                        }
+                                    }
+                                    // 清除缓存，下次重新检测
+                                    orderNullDetectionTime.remove(order.buyOrderId)
+                                    continue
+                                }
+
                                 // 检查订单是否已部分卖出，如果已部分卖出则保留订单用于统计
                                 val hasMatchedDetails =
                                     sellMatchDetailRepository.findByTrackingId(order.id!!).isNotEmpty()
@@ -710,6 +747,43 @@ class OrderStatusUpdateService(
                             orderNullDetectionTime.getOrPut(order.buyOrderId) { System.currentTimeMillis() }
                         val currentTime = System.currentTimeMillis()
 
+                        // 检查订单是否已经通过订单详情更正过数据并发送过通知
+                        if (order.notificationSent) {
+                            // 检查是否超过重试时间窗口
+                            if (currentTime - firstDetectionTime >= ORDER_NULL_RETRY_WINDOW_MS) {
+                                // 超过60秒，将订单状态改为 fully_matched，不再查询
+                                logger.info("订单已发送通知且详情为 null 超过60秒，标记为 fully_matched: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
+                                try {
+                                    val updatedOrder = CopyOrderTracking(
+                                        id = order.id,
+                                        copyTradingId = order.copyTradingId,
+                                        accountId = order.accountId,
+                                        leaderId = order.leaderId,
+                                        marketId = order.marketId,
+                                        side = order.side,
+                                        outcomeIndex = order.outcomeIndex,
+                                        buyOrderId = order.buyOrderId,
+                                        leaderBuyTradeId = order.leaderBuyTradeId,
+                                        quantity = order.quantity,
+                                        price = order.price,
+                                        matchedQuantity = order.matchedQuantity,
+                                        remainingQuantity = order.remainingQuantity,
+                                        status = "fully_matched",  // 标记为完全匹配
+                                        notificationSent = order.notificationSent,
+                                        source = order.source,
+                                        createdAt = order.createdAt,
+                                        updatedAt = System.currentTimeMillis()
+                                    )
+                                    copyOrderTrackingRepository.save(updatedOrder)
+                                } catch (e: Exception) {
+                                    logger.error("更新订单状态失败: orderId=${order.buyOrderId}, error=${e.message}", e)
+                                }
+                            }
+                            // 清除缓存，下次重新检测
+                            orderNullDetectionTime.remove(order.buyOrderId)
+                            continue
+                        }
+
                         // 检查订单是否已部分卖出，如果已部分卖出则保留订单用于统计
                         val hasMatchedDetails = sellMatchDetailRepository.findByTrackingId(order.id!!).isNotEmpty()
                         if (hasMatchedDetails || order.matchedQuantity > BigDecimal.ZERO) {
@@ -746,7 +820,7 @@ class OrderStatusUpdateService(
                         }
 
                         // 超过重试窗口，删除本地订单
-                        logger.warn("订单详情为 null 超过重试窗口，删除本地订单: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, 已等待=$((currentTime - firstDetectionTime) / 1000)s")
+                        logger.warn("订单详情为 null 超过重试窗口，删除本地订单: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}, 已等待=$((currentTime - firstDetectionTime) / 1000}s")
                         try {
                             copyOrderTrackingRepository.deleteById(order.id!!)
                             logger.info("已删除本地订单: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
