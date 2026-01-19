@@ -1,0 +1,13 @@
+{
+  "name": "polyhermes-scripts",
+  "version": "1.0.0",
+  "description": "Utility scripts for Polyhermes",
+  "type": "module",
+  "scripts": {
+    "get-order-detail": "node get-order-detail.js"
+  },
+  "dependencies": {
+    "@ethersproject/wallet": "^5.7.0",
+    "@polymarket/clob-client": "^5.2.1"
+  }
+}
