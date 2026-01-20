@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Card, Button, Spin, Progress, Alert, Space, Typography, Divider, Tag, Modal, message } from 'antd'
+import { Card, Button, Spin, Progress, Alert, Space, Tag, Modal, message } from 'antd'
 import {
     CloudUploadOutlined,
     ReloadOutlined,
     CheckCircleOutlined,
-    ExclamationCircleOutlined,
-    InfoCircleOutlined
+    ExclamationCircleOutlined
 } from '@ant-design/icons'
 import { apiClient } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-const { Title, Text, Paragraph } = Typography
 
 interface UpdateInfo {
     hasUpdate: boolean

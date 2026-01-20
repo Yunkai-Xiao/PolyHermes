@@ -24,7 +24,7 @@ import {
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
-import { removeToken, getVersionText, getGitHubTagUrl, getVersionInfo } from '../utils'
+import { removeToken, getVersionText, getVersionInfo } from '../utils'
 import { wsManager } from '../services/websocket'
 import { apiClient } from '../services/api'
 import Logo from './Logo'
