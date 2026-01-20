@@ -703,8 +703,8 @@ open class CopyOrderTrackingService(
     private fun calculateBuyQuantity(trade: TradeResponse, copyTrading: CopyTrading): BigDecimal {
         return when (copyTrading.copyMode) {
             "RATIO" -> {
-                // 比例模式：Leader 数量 × (比例 / 100)
-                trade.size.toSafeBigDecimal().multi(copyTrading.copyRatio.div(100))
+                // 比例模式：Leader 数量 × 比例倍数（copyRatio 已经是倍数值，如 1.3 表示 130%）
+                trade.size.toSafeBigDecimal().multi(copyTrading.copyRatio)
             }
 
             "FIXED" -> {
@@ -736,7 +736,7 @@ open class CopyOrderTrackingService(
         val leader = leaderRepository.findById(copyTrading.leaderId).orElse(null)
             ?: run {
                 logger.warn("Leader 不存在，使用默认比例: leaderId=${copyTrading.leaderId}")
-                return leaderSellQuantity.multi(copyTrading.copyRatio.div(100))
+                return leaderSellQuantity.multi(copyTrading.copyRatio)
             }
 
         // 创建不需要认证的 CLOB API 客户端（用于查询公开的交易数据）
@@ -807,7 +807,7 @@ open class CopyOrderTrackingService(
         // 如果无法计算总比例（查询失败），使用默认比例
         if (totalLeaderQuantity.lte(BigDecimal.ZERO)) {
             logger.warn("无法计算总比例（Leader 买入数量为 0），使用默认比例: copyTradingId=${copyTrading.id}")
-            return leaderSellQuantity.multi(copyTrading.copyRatio.div(100))
+            return leaderSellQuantity.multi(copyTrading.copyRatio)
         }
 
         // 计算实际比例：跟单买入数量 / Leader 买入数量
@@ -883,13 +883,13 @@ open class CopyOrderTrackingService(
             }
 
             "RATIO" -> {
-                // 比例模式：直接使用配置的 copyRatio (需要除以100)
-                leaderSellTrade.size.toSafeBigDecimal().multi(copyTrading.copyRatio.div(100))
+                // 比例模式：直接使用配置的 copyRatio（已经是倍数值，如 1.3 表示 130%）
+                leaderSellTrade.size.toSafeBigDecimal().multi(copyTrading.copyRatio)
             }
 
             else -> {
                 logger.warn("不支持的 copyMode: ${copyTrading.copyMode}，使用默认比例模式")
-                leaderSellTrade.size.toSafeBigDecimal().multi(copyTrading.copyRatio.div(100))
+                leaderSellTrade.size.toSafeBigDecimal().multi(copyTrading.copyRatio)
             }
         }
 
