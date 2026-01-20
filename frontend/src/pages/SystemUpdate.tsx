@@ -113,7 +113,7 @@ const SystemUpdate: React.FC = () => {
             cancelText: '取消',
             onOk: async () => {
                 try {
-                    const response = await apiClient.post('/update/execute', {})
+                    const response = await apiClient.post('/update/update', {})
                     const data = response.data
 
                     if (data.code === 0) {
