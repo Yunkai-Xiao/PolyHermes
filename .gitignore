@@ -26,6 +26,7 @@ backend/.gradle
 
 # Java
 *.jar
+!backend/gradle/wrapper/gradle-wrapper.jar  # Gradle Wrapper JAR 应该被提交
 *.war
 *.ear
 *.class
