@@ -195,6 +195,22 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
+      - name: Prepare Docker build context
+        run: |
+          echo "📦 准备 Docker 构建上下文..."
+          # 确保构建产物存在且可访问
+          if [ ! -d "frontend/dist" ]; then
+            echo "❌ 错误：frontend/dist 不存在"
+            exit 1
+          fi
+          if [ ! -d "backend/build/libs" ] || [ -z "$(ls -A backend/build/libs/*.jar 2>/dev/null)" ]; then
+            echo "❌ 错误：backend/build/libs/*.jar 不存在"
+            exit 1
+          fi
+          echo "✅ 构建产物已准备好"
+          ls -lh frontend/dist/ | head -5
+          ls -lh backend/build/libs/*.jar
+      
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:

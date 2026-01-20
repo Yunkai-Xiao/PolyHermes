@@ -19,8 +19,7 @@ ARG GITHUB_REPO_URL=https://github.com/WrBug/PolyHermes
 ENV VERSION=${VERSION}
 ENV GIT_TAG=${GIT_TAG}
 ENV GITHUB_REPO_URL=${GITHUB_REPO_URL}
-
-# 复制前端文件
+# 复制前端文件（先复制 package.json 以利用 Docker 缓存）
 COPY frontend/package*.json ./
 
 # 条件：仅在 Docker 内部编译时安装依赖
@@ -28,23 +27,24 @@ RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
       npm ci; \
     fi
 
+# 复制所有前端源文件
 COPY frontend/ ./
 
-# 如果使用外部产物，先从构建上下文复制外部编译的 dist
-# 注意：如果 BUILD_IN_DOCKER=true 且本地没有 dist，这个 COPY 会失败，但会在下面编译生成
-COPY frontend/dist ./dist
-
-# 条件：仅在 Docker 内部编译时执行构建（会覆盖外部产物）
+# 条件：仅在 Docker 内部编译时执行构建
+# 如果 BUILD_IN_DOCKER=false，需要从构建上下文复制外部编译的 dist
 RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
       echo "🔨 Docker 内部编译前端..."; \
       npm run build; \
     else \
-      echo "⏭️  使用外部产物"; \
-      if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then \
-        echo "❌ 错误：BUILD_IN_DOCKER=false 但找不到外部产物 frontend/dist"; \
-        exit 1; \
-      fi; \
+      echo "⏭️  使用外部产物，将在下一步复制"; \
+      mkdir -p dist; \
     fi
+
+# 如果使用外部产物，从构建上下文复制外部编译的 dist
+# 注意：这个 COPY 在 BUILD_IN_DOCKER=false 时必需
+# 在 BUILD_IN_DOCKER=true 时，如果前端已编译，这个 COPY 会尝试覆盖，但结果相同
+# 如果本地没有 dist（BUILD_IN_DOCKER=true 且未编译），这个 COPY 会失败，但上面的 RUN 已经编译了
+COPY frontend/dist ./dist
 
 # ==================== 阶段2：构建后端 ====================
 FROM gradle:8.5-jdk17 AS backend-build
