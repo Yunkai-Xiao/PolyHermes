@@ -358,7 +358,7 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
                         {marketDisplayName}
                       </span>
                     )}
-                    <Tag color="success">{t('copyTradingOrders.allFullyMatched') || '全部成交'}</Tag>
+                    <Tag color="success">{t('copyTradingOrders.allFullySold') || '全部卖出'}</Tag>
                   </div>
                   <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: isMobile ? '12px' : '13px', color: '#666' }}>
                     <span>{t('copyTradingOrders.orderCount') || '订单数'}: {group.stats.count}</span>
@@ -648,8 +648,8 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
           onChange={(value) => setFilters({ ...filters, status: value || undefined })}
         >
           <Option value="filled">{t('copyTradingOrders.statusFilled') || '未成交'}</Option>
-          <Option value="partially_matched">{t('copyTradingOrders.statusPartiallyMatched') || '部分成交'}</Option>
-          <Option value="fully_matched">{t('copyTradingOrders.statusFullyMatched') || '完全成交'}</Option>
+          <Option value="partially_matched">{t('copyTradingOrders.partiallySold') || '部分卖出'}</Option>
+          <Option value="fully_matched">{t('copyTradingOrders.allFullySold') || '全部卖出'}</Option>
         </Select>
 
         <Space>

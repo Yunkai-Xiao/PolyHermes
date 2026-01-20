@@ -373,10 +373,12 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
                       </span>
                     )}
                     {group.stats.fullyMatched ? (
-                      <Tag color="success">{t('copyTradingOrders.allFullyMatched') || '全部成交'}</Tag>
+                      <Tag color="success">{t('copyTradingOrders.allFullySold') || '全部卖出'}</Tag>
+                    ) : group.stats.fullyMatchedCount === 0 ? (
+                      <Tag color="default">{t('copyTradingOrders.notSold') || '未卖出'}</Tag>
                     ) : (
                       <Tag color="warning">
-                        {t('copyTradingOrders.partiallyMatched') || '部分成交'} ({group.stats.fullyMatchedCount}/{group.stats.count})
+                        {t('copyTradingOrders.partiallySold') || '部分卖出'} ({group.stats.fullyMatchedCount}/{group.stats.count})
                       </Tag>
                     )}
                   </div>
@@ -384,10 +386,10 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
                     <span>{t('copyTradingOrders.orderCount') || '订单数'}: {group.stats.count}</span>
                     <span>{t('copyTradingOrders.totalAmount') || '总金额'}: {formatUSDC(group.stats.totalAmount)} USDC</span>
                     <span>
-                      {t('copyTradingOrders.statusBreakdown') || '状态'}: 
-                      {group.stats.fullyMatchedCount > 0 && ` ${t('copyTradingOrders.statusFullySold') || '全部成交'} ${group.stats.fullyMatchedCount}`}
-                      {group.stats.partiallyMatchedCount > 0 && ` ${t('copyTradingOrders.statusPartiallySold') || '部分成交'} ${group.stats.partiallyMatchedCount}`}
-                      {group.stats.filledCount > 0 && ` ${t('copyTradingOrders.statusFilled') || '未成交'} ${group.stats.filledCount}`}
+                      {t('copyTradingOrders.statusBreakdown') || '状态'}:
+                      {group.stats.fullyMatchedCount > 0 && ` ${t('copyTradingOrders.allFullySold') || '全部卖出'} ${group.stats.fullyMatchedCount}`}
+                      {group.stats.partiallyMatchedCount > 0 && ` ${t('copyTradingOrders.partiallySold') || '部分卖出'} ${group.stats.partiallyMatchedCount}`}
+                      {group.stats.filledCount > 0 && ` ${t('copyTradingOrders.notSold') || '未卖出'} ${group.stats.filledCount}`}
                     </span>
                   </div>
                 </div>
@@ -668,9 +670,9 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
           value={filters.status}
           onChange={(value) => setFilters({ ...filters, status: value || undefined })}
         >
-          <Option value="filled">{t('copyTradingOrders.statusFilled') || '未成交'}</Option>
-          <Option value="partially_matched">{t('copyTradingOrders.statusPartiallySold') || '部分成交'}</Option>
-          <Option value="fully_matched">{t('copyTradingOrders.statusFullySold') || '全部成交'}</Option>
+          <Option value="filled">{t('copyTradingOrders.notSold') || '未卖出'}</Option>
+          <Option value="partially_matched">{t('copyTradingOrders.partiallySold') || '部分卖出'}</Option>
+          <Option value="fully_matched">{t('copyTradingOrders.allFullySold') || '全部卖出'}</Option>
         </Select>
 
         <Space>
