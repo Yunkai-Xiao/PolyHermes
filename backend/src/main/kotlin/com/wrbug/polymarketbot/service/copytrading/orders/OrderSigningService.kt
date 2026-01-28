@@ -94,14 +94,16 @@ class OrderSigningService {
         if (side.uppercase() == "BUY") {
             // BUY: makerAmount = price * size (USDC), takerAmount = size (shares)
             // 参考 clob-client/src/order-builder/helpers.ts 第 73-89 行
-            val rawTakerAmt = roundDown(sizeDecimal, roundConfig.size)
+            // 注意：Polymarket API 要求市场买入订单的 makerAmount 最多 2 位小数，takerAmount 最多 4 位小数
+            // takerAmount (shares) 使用 4 位小数
+            val rawTakerAmt = roundDown(sizeDecimal, 4)
 
             var rawMakerAmt = rawTakerAmt.multiply(rawPrice)
-            // 如果 makerAmount 的小数位数超过 roundConfig.amount，进行特殊舍入处理
-            if (decimalPlaces(rawMakerAmt) > roundConfig.amount) {
-                rawMakerAmt = roundUp(rawMakerAmt, roundConfig.amount + 4)
-                if (decimalPlaces(rawMakerAmt) > roundConfig.amount) {
-                    rawMakerAmt = roundDown(rawMakerAmt, roundConfig.amount)
+            // makerAmount (USDC) 使用 2 位小数
+            if (decimalPlaces(rawMakerAmt) > 2) {
+                rawMakerAmt = roundUp(rawMakerAmt, 2 + 4)
+                if (decimalPlaces(rawMakerAmt) > 2) {
+                    rawMakerAmt = roundDown(rawMakerAmt, 2)
                 }
             }
 
