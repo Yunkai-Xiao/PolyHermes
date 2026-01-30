@@ -34,7 +34,10 @@
     "previous": "Previous",
     "next": "Next",
     "page": "Page",
-    "pageOf": "Page"
+    "pageOf": "Page",
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "day": "day"
   },
   "account": {
     "title": "Account Management",
@@ -1326,6 +1329,25 @@
     "starting": "Starting...",
     "stopping": "Stopping...",
     "errorOccurred": "Error occurred",
-    "retry": "Retry"
+    "retry": "Retry",
+    "taskNameRequired": "Please enter task name",
+    "leaderRequired": "Please select Leader",
+    "initialBalanceRequired": "Please enter initial balance",
+    "initialBalanceInvalid": "Initial balance must be greater than 0",
+    "backtestDaysRequired": "Please enter backtest days",
+    "backtestDaysInvalid": "Backtest days must be between 1-15",
+    "copyRatioRequired": "Please enter copy ratio",
+    "copyRatioInvalid": "Copy ratio must be between 0.01-10000",
+    "copyRatioPlaceholder": "For example: 100 means 100% (1:1 copy), default 100%",
+    "copyRatioTooltip": "Copy ratio represents the percentage of copy amount relative to Leader order amount. For example: 100% means 1:1 copy, 50% means half position copy, 200% means double copy",
+    "fixedAmountRequired": "Please enter fixed amount",
+    "fixedAmountInvalid": "Fixed amount must be greater than 0",
+    "advancedFilters": "Advanced Filters",
+    "keywordsPlaceholder": "Please enter keywords, press Enter to add",
+    "delaySecondsHint": "Delay execution to simulate real copy trading delay",
+    "supportSellHint": "Whether to follow Leader's sell operations",
+    "sortBy": "Sort By",
+    "sortOrder": "Sort Order",
+    "createdAt": "Created At"
   }
 }

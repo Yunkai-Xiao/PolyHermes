@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col } from 'antd'
+import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch } from 'antd'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
-import { backtestService } from '../services/api'
-import type { BacktestTaskDto, BacktestListRequest } from '../types/backtest'
+import { backtestService, apiService } from '../services/api'
+import type { BacktestTaskDto, BacktestListRequest, BacktestCreateRequest } from '../types/backtest'
+import type { Leader } from '../types'
+
+const { Option } = Select
 
 const BacktestList: React.FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [tasks, setTasks] = useState<BacktestTaskDto[]>([])
   const [total, setTotal] = useState(0)
@@ -17,6 +22,13 @@ const BacktestList: React.FC = () => {
   const [leaderIdFilter] = useState<number | undefined>()
   const [sortBy, setSortBy] = useState<'profitAmount' | 'profitRate' | 'createdAt'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  
+  // 创建回测 modal 相关状态
+  const [createModalVisible, setCreateModalVisible] = useState(false)
+  const [createForm] = Form.useForm()
+  const [createLoading, setCreateLoading] = useState(false)
+  const [leaders, setLeaders] = useState<Leader[]>([])
+  const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
 
   // 获取回测任务列表
   const fetchTasks = async () => {
@@ -100,14 +112,94 @@ const BacktestList: React.FC = () => {
     })
   }
 
+  // 获取 Leader 列表
+  useEffect(() => {
+    if (createModalVisible) {
+      const fetchLeaders = async () => {
+        try {
+          const response = await apiService.leaders.list({})
+          if (response.data.code === 0 && response.data.data) {
+            setLeaders(response.data.data.list || [])
+          }
+        } catch (error) {
+          console.error('Failed to fetch leaders:', error)
+        }
+      }
+      fetchLeaders()
+    }
+  }, [createModalVisible])
+
   // 查看详情
   const handleViewDetail = (id: number) => {
-    window.location.href = `/backtest/detail?id=${id}`
+    navigate(`/backtest/detail/${id}`)
   }
 
-  // 创建新任务
+  // 打开创建 modal
   const handleCreate = () => {
-    window.location.href = '/backtest/create'
+    setCreateModalVisible(true)
+    createForm.resetFields()
+    createForm.setFieldsValue({
+      copyMode: 'RATIO',
+      copyRatio: 100, // 默认 100%（显示为百分比）
+      maxOrderSize: 1000,
+      minOrderSize: 1,
+      maxDailyLoss: 500,
+      maxDailyOrders: 50,
+      priceTolerance: 5,
+      delaySeconds: 0,
+      supportSell: true,
+      keywordFilterMode: 'DISABLED',
+      backtestDays: 7
+    })
+    setCopyMode('RATIO')
+  }
+
+  // 提交创建回测任务
+  const handleCreateSubmit = async () => {
+    try {
+      const values = await createForm.validateFields()
+      setCreateLoading(true)
+
+      const request: BacktestCreateRequest = {
+        taskName: values.taskName,
+        leaderId: values.leaderId,
+        initialBalance: values.initialBalance,
+        backtestDays: values.backtestDays,
+        copyMode: values.copyMode || 'RATIO',
+        copyRatio: values.copyMode === 'RATIO' && values.copyRatio ? (values.copyRatio / 100).toString() : undefined,
+        fixedAmount: values.copyMode === 'FIXED' ? values.fixedAmount : undefined,
+        maxOrderSize: values.maxOrderSize,
+        minOrderSize: values.minOrderSize,
+        maxDailyLoss: values.maxDailyLoss,
+        maxDailyOrders: values.maxDailyOrders,
+        priceTolerance: values.priceTolerance,
+        delaySeconds: values.delaySeconds,
+        supportSell: values.supportSell,
+        minOrderDepth: values.minOrderDepth,
+        maxSpread: values.maxSpread,
+        minPrice: values.minPrice,
+        maxPrice: values.maxPrice,
+        maxPositionValue: values.maxPositionValue,
+        keywordFilterMode: values.keywordFilterMode,
+        keywords: values.keywords,
+        maxMarketEndDate: values.maxMarketEndDate
+      }
+
+      const response = await backtestService.create(request)
+      if (response.data.code === 0) {
+        message.success(t('backtest.createSuccess'))
+        setCreateModalVisible(false)
+        createForm.resetFields()
+        fetchTasks()
+      } else {
+        message.error(response.data.msg || t('backtest.createFailed'))
+      }
+    } catch (error) {
+      console.error('Failed to create backtest task:', error)
+      message.error(t('backtest.createFailed'))
+    } finally {
+      setCreateLoading(false)
+    }
   }
 
   // 状态标签颜色
@@ -145,7 +237,8 @@ const BacktestList: React.FC = () => {
       title: t('backtest.leader'),
       dataIndex: 'leaderName',
       key: 'leaderName',
-      width: 150
+      width: 150,
+      render: (_: any, record: BacktestTaskDto) => record.leaderName || record.leaderAddress || '-'
     },
     {
       title: t('backtest.initialBalance'),
@@ -356,6 +449,309 @@ const BacktestList: React.FC = () => {
           />
         </Space>
       </Card>
+
+      {/* 创建回测任务 Modal */}
+      <Modal
+        title={t('backtest.createTask')}
+        open={createModalVisible}
+        onCancel={() => {
+          setCreateModalVisible(false)
+          createForm.resetFields()
+        }}
+        onOk={handleCreateSubmit}
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
+        width={800}
+        confirmLoading={createLoading}
+        destroyOnClose
+        style={{ top: 20 }}
+        bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+      >
+        <Form
+          form={createForm}
+          layout="vertical"
+          initialValues={{
+            copyMode: 'RATIO',
+            copyRatio: 100, // 默认 100%（显示为百分比）
+            maxOrderSize: 1000,
+            minOrderSize: 1,
+            maxDailyLoss: 500,
+            maxDailyOrders: 50,
+            priceTolerance: 5,
+            delaySeconds: 0,
+            supportSell: true,
+            keywordFilterMode: 'DISABLED',
+            backtestDays: 7
+          }}
+        >
+          <Row gutter={24}>
+            <Col span={12}>
+              <Form.Item
+                label={t('backtest.taskName')}
+                name="taskName"
+                rules={[{ required: true, message: t('backtest.taskNameRequired') || '请输入任务名称' }]}
+              >
+                <Input placeholder={t('backtest.taskName')} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t('backtest.leader')}
+                name="leaderId"
+                rules={[{ required: true, message: t('backtest.leaderRequired') || '请选择 Leader' }]}
+              >
+                <Select placeholder={t('backtest.leader')} showSearch>
+                  {leaders.map((leader) => (
+                    <Option key={leader.id} value={leader.id}>
+                      {leader.leaderName || leader.leaderAddress}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={24}>
+            <Col span={12}>
+              <Form.Item
+                label={t('backtest.initialBalance') + ' (USDC)'}
+                name="initialBalance"
+                rules={[
+                  { required: true, message: t('backtest.initialBalanceRequired') || '请输入初始资金' },
+                  { type: 'number', min: 1, message: t('backtest.initialBalanceInvalid') || '初始资金必须大于 0' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder={t('backtest.initialBalance')}
+                  precision={2}
+                  min={1}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t('backtest.backtestDays') + ` (1-15 ${t('common.day')})`}
+                name="backtestDays"
+                rules={[
+                  { required: true, message: t('backtest.backtestDaysRequired') || '请输入回测天数' },
+                  { type: 'number', min: 1, max: 15, message: t('backtest.backtestDaysInvalid') || '回测天数必须在 1-15 之间' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder={t('backtest.backtestDays')}
+                  precision={0}
+                  min={1}
+                  max={15}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* 跟单配置 */}
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ marginBottom: 16 }}>{t('backtest.config')}</h3>
+
+            <Form.Item
+              label={t('backtest.copyMode')}
+              name="copyMode"
+            >
+              <Select onChange={(value) => setCopyMode(value)}>
+                <Option value="RATIO">{t('backtest.copyModeRatio')}</Option>
+                <Option value="FIXED">{t('backtest.copyModeFixed')}</Option>
+              </Select>
+            </Form.Item>
+
+            {copyMode === 'RATIO' && (
+              <Form.Item
+                label={t('backtest.copyRatio')}
+                name="copyRatio"
+                tooltip={t('backtest.copyRatioTooltip') || '跟单比例表示跟单金额相对于 Leader 订单金额的百分比。例如：100% 表示 1:1 跟单，50% 表示半仓跟单，200% 表示双倍跟单'}
+                rules={[
+                  { required: true, message: t('backtest.copyRatioRequired') || '请输入跟单比例' },
+                  { type: 'number', min: 0.01, max: 10000, message: t('backtest.copyRatioInvalid') || '跟单比例必须在 0.01-10000 之间' }
+                ]}
+              >
+                <InputNumber
+                  min={0.01}
+                  max={10000}
+                  step={0.01}
+                  precision={2}
+                  style={{ width: '100%' }}
+                  addonAfter="%"
+                  placeholder={t('backtest.copyRatioPlaceholder') || '例如：100 表示 100%（1:1 跟单），默认 100%'}
+                  parser={(value) => {
+                    const parsed = parseFloat(value || '0')
+                    if (parsed > 10000) return 10000
+                    return parsed
+                  }}
+                  formatter={(value) => {
+                    if (!value && value !== 0) return ''
+                    const num = parseFloat(value.toString())
+                    if (isNaN(num)) return ''
+                    if (num > 10000) return '10000'
+                    return num.toString().replace(/\.0+$/, '')
+                  }}
+                />
+              </Form.Item>
+            )}
+
+            {copyMode === 'FIXED' && (
+              <Form.Item
+                label={t('backtest.fixedAmount') + ' (USDC)'}
+                name="fixedAmount"
+                rules={[
+                  { required: true, message: t('backtest.fixedAmountRequired') || '请输入固定金额' },
+                  { type: 'number', min: 1, message: t('backtest.fixedAmountInvalid') || '固定金额必须大于 0' }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder={t('backtest.fixedAmount')}
+                  precision={2}
+                  min={1}
+                />
+              </Form.Item>
+            )}
+
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.maxOrderSize') + ' (USDC)'}
+                  name="maxOrderSize"
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber style={{ width: '100%' }} precision={2} min={1} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.minOrderSize') + ' (USDC)'}
+                  name="minOrderSize"
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber style={{ width: '100%' }} precision={2} min={1} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.maxDailyLoss') + ' (USDC)'}
+                  name="maxDailyLoss"
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber style={{ width: '100%' }} precision={2} min={0} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.maxDailyOrders')}
+                  name="maxDailyOrders"
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber style={{ width: '100%' }} precision={0} min={1} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              label={t('backtest.priceTolerance') + ' (%)'}
+              name="priceTolerance"
+            >
+              <InputNumber style={{ width: '100%' }} precision={2} min={0} max={100} />
+            </Form.Item>
+
+            <Form.Item
+              label={t('backtest.delaySeconds')}
+              name="delaySeconds"
+            >
+              <InputNumber style={{ width: '100%' }} precision={0} min={0} />
+              <span style={{ fontSize: 12, color: '#888' }}>{t('backtest.delaySecondsHint') || '延迟执行模拟真实跟单延迟'}</span>
+            </Form.Item>
+
+            <Form.Item
+              label={t('backtest.supportSell')}
+              name="supportSell"
+              valuePropName="checked"
+            >
+              <Switch />
+              <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{t('backtest.supportSellHint') || '是否跟随 Leader 的卖出操作'}</span>
+            </Form.Item>
+
+            <h4 style={{ marginTop: 24, marginBottom: 16 }}>{t('backtest.advancedFilters')}</h4>
+
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.minOrderDepth') + ' (USDC)'}
+                  name="minOrderDepth"
+                >
+                  <InputNumber style={{ width: '100%' }} precision={2} min={0} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.maxSpread') + ' (%)'}
+                  name="maxSpread"
+                >
+                  <InputNumber style={{ width: '100%' }} precision={2} min={0} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.minPrice')}
+                  name="minPrice"
+                >
+                  <InputNumber style={{ width: '100%' }} precision={4} min={0} max={1} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label={t('backtest.maxPrice')}
+                  name="maxPrice"
+                >
+                  <InputNumber style={{ width: '100%' }} precision={4} min={0} max={1} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              label={t('backtest.maxPositionValue') + ' (USDC)'}
+              name="maxPositionValue"
+            >
+              <InputNumber style={{ width: '100%' }} precision={2} min={0} />
+            </Form.Item>
+
+            <Form.Item
+              label={t('backtest.keywordFilterMode')}
+              name="keywordFilterMode"
+            >
+              <Select>
+                <Option value="DISABLED">{t('backtest.keywordFilterModeDisabled')}</Option>
+                <Option value="WHITELIST">{t('backtest.keywordFilterModeWhitelist')}</Option>
+                <Option value="BLACKLIST">{t('backtest.keywordFilterModeBlacklist')}</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              label={t('backtest.keywords')}
+              name="keywords"
+            >
+              <Select
+                mode="tags"
+                style={{ width: '100%' }}
+                placeholder={t('backtest.keywordsPlaceholder') || '请输入关键字，按回车添加'}
+              />
+            </Form.Item>
+          </div>
+        </Form>
+      </Modal>
     </div>
   )
 }

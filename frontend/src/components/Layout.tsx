@@ -72,7 +72,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const getInitialOpenKeys = (): string[] => {
     const path = location.pathname
     const keys: string[] = []
-    if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading')) {
+    if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading') || path.startsWith('/backtest')) {
       keys.push('/copy-trading-management')
     }
     if (path.startsWith('/system-settings')) {
@@ -87,7 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     const path = location.pathname
     const keys: string[] = []
-    if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading')) {
+    if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading') || path.startsWith('/backtest')) {
       keys.push('/copy-trading-management')
     }
     if (path.startsWith('/system-settings')) {
@@ -149,6 +149,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           key: '/templates',
           icon: <FileTextOutlined />,
           label: t('menu.templates')
+        },
+        {
+          key: '/backtest',
+          icon: <LineChartOutlined />,
+          label: t('menu.backtest') || '回测'
         }
       ]
     },
@@ -156,11 +161,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/positions',
       icon: <UnorderedListOutlined />,
       label: t('menu.positions')
-    },
-    {
-      key: '/backtest',
-      icon: <LineChartOutlined />,
-      label: t('menu.backtest') || '回测'
     },
     {
       key: '/statistics',

@@ -45,7 +45,7 @@ const BacktestCreate: React.FC = () => {
         initialBalance: values.initialBalance,
         backtestDays: values.backtestDays,
         copyMode: values.copyMode || 'RATIO',
-        copyRatio: values.copyMode === 'RATIO' ? values.copyRatio : undefined,
+        copyRatio: values.copyMode === 'RATIO' && values.copyRatio ? (values.copyRatio / 100).toString() : undefined,
         fixedAmount: values.copyMode === 'FIXED' ? values.fixedAmount : undefined,
         maxOrderSize: values.maxOrderSize,
         minOrderSize: values.minOrderSize,
@@ -88,7 +88,7 @@ const BacktestCreate: React.FC = () => {
   useEffect(() => {
     form.setFieldsValue({
       copyMode: 'RATIO',
-      copyRatio: 1.0,
+      copyRatio: 100, // 默认 100%（显示为百分比）
       maxOrderSize: 1000,
       minOrderSize: 1,
       maxDailyLoss: 500,
@@ -117,7 +117,7 @@ const BacktestCreate: React.FC = () => {
           onFinish={handleSubmit}
           initialValues={{
             copyMode: 'RATIO',
-            copyRatio: 1.0,
+            copyRatio: 100, // 默认 100%（显示为百分比）
             maxOrderSize: 1000,
             minOrderSize: 1,
             maxDailyLoss: 500,
@@ -212,18 +212,32 @@ const BacktestCreate: React.FC = () => {
               <Form.Item
                 label={t('backtest.copyRatio')}
                 name="copyRatio"
+                tooltip={t('backtest.copyRatioTooltip') || '跟单比例表示跟单金额相对于 Leader 订单金额的百分比。例如：100% 表示 1:1 跟单，50% 表示半仓跟单，200% 表示双倍跟单'}
                 rules={[
                   { required: true, message: t('backtest.copyRatioRequired') || '请输入跟单比例' },
-                  { type: 'number', min: 0.01, max: 10, message: t('backtest.copyRatioInvalid') || '跟单比例必须在 0.01-10 之间' }
+                  { type: 'number', min: 0.01, max: 10000, message: t('backtest.copyRatioInvalid') || '跟单比例必须在 0.01-10000 之间' }
                 ]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
-                  placeholder={t('backtest.copyRatio')}
-                  precision={2}
                   min={0.01}
-                  max={10}
+                  max={10000}
                   step={0.01}
+                  precision={2}
+                  style={{ width: '100%' }}
+                  addonAfter="%"
+                  placeholder={t('backtest.copyRatioPlaceholder') || '例如：100 表示 100%（1:1 跟单），默认 100%'}
+                  parser={(value) => {
+                    const parsed = parseFloat(value || '0')
+                    if (parsed > 10000) return 10000
+                    return parsed
+                  }}
+                  formatter={(value) => {
+                    if (!value && value !== 0) return ''
+                    const num = parseFloat(value.toString())
+                    if (isNaN(num)) return ''
+                    if (num > 10000) return '10000'
+                    return num.toString().replace(/\.0+$/, '')
+                  }}
                 />
               </Form.Item>
             )}

@@ -756,7 +756,7 @@ export const backtestService = {
     keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'
     keywords?: string[]
     maxMarketEndDate?: number | null
-  }) => apiClient.post('/api/backtest/tasks', data),
+  }) => apiClient.post('/backtest/tasks', data),
 
   /**
    * 查询回测任务列表
@@ -768,12 +768,12 @@ export const backtestService = {
     sortOrder?: 'asc' | 'desc'
     page: number
     size: number
-  }) => apiClient.post('/api/backtest/tasks/list', data),
+  }) => apiClient.post('/backtest/tasks/list', data),
 
   /**
    * 查询回测任务详情
    */
-  detail: (data: { id: number }) => apiClient.post('/api/backtest/tasks/detail', data),
+  detail: (data: { id: number }) => apiClient.post('/backtest/tasks/detail', data),
 
   /**
    * 查询回测交易记录
@@ -782,16 +782,16 @@ export const backtestService = {
     taskId: number
     page: number
     size: number
-  }) => apiClient.post('/api/backtest/tasks/trades', data),
+  }) => apiClient.post('/backtest/tasks/trades', data),
 
   /**
    * 停止回测任务
    */
-  stop: (data: { id: number }) => apiClient.post('/api/backtest/tasks/stop', data),
+  stop: (data: { id: number }) => apiClient.post('/backtest/tasks/stop', data),
 
   /**
    * 删除回测任务
    */
-  delete: (data: { id: number }) => apiClient.post('/api/backtest/tasks/delete', data)
+  delete: (data: { id: number }) => apiClient.post('/backtest/tasks/delete', data)
 }
 

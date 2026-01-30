@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Descriptions, Button, Tag, Space, Table, message, Row, Col, Statistic, Spin } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,7 @@ import BacktestChart from './BacktestChart'
 
 const BacktestDetail: React.FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<BacktestTaskDto | null>(null)
@@ -102,7 +103,7 @@ const BacktestDetail: React.FC = () => {
 
   // 返回
   const handleBack = () => {
-    window.location.href = '/backtest/list'
+    navigate('/backtest')
   }
 
   // 停止任务
@@ -136,7 +137,7 @@ const BacktestDetail: React.FC = () => {
         const response = await backtestService.delete({ id: parseInt(id!) })
         if (response.data.code === 0) {
           message.success(t('backtest.deleteSuccess'))
-          window.location.href = '/backtest/list'
+          navigate('/backtest')
         } else {
           message.error(response.data.msg || t('backtest.deleteFailed'))
         }

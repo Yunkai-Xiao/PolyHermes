@@ -34,7 +34,10 @@
     "pageOf": "第",
     "success": "成功",
     "failed": "失败",
-    "close": "关闭"
+    "close": "关闭",
+    "ascending": "升序",
+    "descending": "降序",
+    "day": "天"
   },
   "login": {
     "title": "登录",
@@ -1326,6 +1329,25 @@
     "starting": "启动中...",
     "stopping": "停止中...",
     "errorOccurred": "发生错误",
-    "retry": "重试"
+    "retry": "重试",
+    "taskNameRequired": "请输入任务名称",
+    "leaderRequired": "请选择 Leader",
+    "initialBalanceRequired": "请输入初始资金",
+    "initialBalanceInvalid": "初始资金必须大于 0",
+    "backtestDaysRequired": "请输入回测天数",
+    "backtestDaysInvalid": "回测天数必须在 1-15 之间",
+    "copyRatioRequired": "请输入跟单比例",
+    "copyRatioInvalid": "跟单比例必须在 0.01-10000 之间",
+    "copyRatioPlaceholder": "例如：100 表示 100%（1:1 跟单），默认 100%",
+    "copyRatioTooltip": "跟单比例表示跟单金额相对于 Leader 订单金额的百分比。例如：100% 表示 1:1 跟单，50% 表示半仓跟单，200% 表示双倍跟单",
+    "fixedAmountRequired": "请输入固定金额",
+    "fixedAmountInvalid": "固定金额必须大于 0",
+    "advancedFilters": "高级过滤",
+    "keywordsPlaceholder": "请输入关键字，按回车添加",
+    "delaySecondsHint": "延迟执行模拟真实跟单延迟",
+    "supportSellHint": "是否跟随 Leader 的卖出操作",
+    "sortBy": "排序字段",
+    "sortOrder": "排序顺序",
+    "createdAt": "创建时间"
   }
 }

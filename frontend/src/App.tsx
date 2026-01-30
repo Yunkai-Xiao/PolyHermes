@@ -33,7 +33,6 @@ import ApiHealthStatus from './pages/ApiHealthStatus'
 import RpcNodeSettings from './pages/RpcNodeSettings'
 import Announcements from './pages/Announcements'
 import BacktestList from './pages/BacktestList'
-import BacktestCreate from './pages/BacktestCreate'
 import BacktestDetail from './pages/BacktestDetail'
 import { wsManager } from './services/websocket'
 import type { OrderPushMessage } from './types'
@@ -258,7 +257,6 @@ function App() {
           <Route path="/copy-trading/orders/matched/:copyTradingId" element={<ProtectedRoute><CopyTradingMatchedOrders /></ProtectedRoute>} />
           <Route path="/copy-trading/filtered-orders/:id" element={<ProtectedRoute><FilteredOrdersList /></ProtectedRoute>} />
           <Route path="/backtest" element={<ProtectedRoute><BacktestList /></ProtectedRoute>} />
-          <Route path="/backtest/create" element={<ProtectedRoute><BacktestCreate /></ProtectedRoute>} />
           <Route path="/backtest/detail/:id" element={<ProtectedRoute><BacktestDetail /></ProtectedRoute>} />
           <Route path="/config" element={<ProtectedRoute><ConfigPage /></ProtectedRoute>} />
           <Route path="/positions" element={<ProtectedRoute><PositionList /></ProtectedRoute>} />
