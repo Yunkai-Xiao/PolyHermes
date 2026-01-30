@@ -140,7 +140,7 @@ class LeaderController(
             if (request.leaderId <= 0) {
                 return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ID_INVALID, messageSource = messageSource))
             }
-            
+
             val result = leaderService.getLeaderDetail(request.leaderId)
             result.fold(
                 onSuccess = { leader ->
@@ -157,6 +157,36 @@ class LeaderController(
         } catch (e: Exception) {
             logger.error("查询 Leader 详情异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_LEADER_DETAIL_FETCH_FAILED, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 查询被跟单者余额
+     */
+    @PostMapping("/balance")
+    fun getLeaderBalance(@RequestBody request: LeaderBalanceRequest): ResponseEntity<ApiResponse<LeaderBalanceResponse>> {
+        return try {
+            if (request.leaderId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_LEADER_ID_INVALID, messageSource = messageSource))
+            }
+
+            val result = leaderService.getLeaderBalance(request.leaderId)
+            result.fold(
+                onSuccess = { balance ->
+                    ResponseEntity.ok(ApiResponse.success(balance))
+                },
+                onFailure = { e ->
+                    logger.error("查询 Leader 余额失败: ${e.message}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, e.message, messageSource))
+                        is IllegalStateException -> ResponseEntity.ok(ApiResponse.error(ErrorCode.BUSINESS_ERROR, e.message, messageSource))
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("查询 Leader 余额异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
         }
     }
 }
