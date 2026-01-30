@@ -278,7 +278,7 @@ class AccountService(
             if (accountId == null) {
                 return Result.failure(IllegalArgumentException("账户ID不能为空"))
             }
-            
+
             val account = accountRepository.findById(accountId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException("账户不存在"))
 
@@ -288,68 +288,19 @@ class AccountService(
                 return Result.failure(IllegalStateException("账户代理地址不存在，无法查询余额。请重新导入账户以获取代理地址"))
             }
 
-            // 查询 USDC 余额和持仓信息
+            // 使用通用方法查询余额
             val balanceResult = runBlocking {
-                try {
-                    // 查询持仓信息（用于返回持仓列表）
-                    // 使用代理地址查询持仓（Polymarket 使用代理地址存储持仓）
-                    val positionsResult = blockchainService.getPositions(account.proxyAddress)
-                    val positions = if (positionsResult.isSuccess) {
-                        positionsResult.getOrNull()?.map { pos ->
-                            PositionDto(
-                                marketId = pos.conditionId ?: "",
-                                side = pos.outcome ?: "",
-                                quantity = pos.size?.toString() ?: "0",
-                                avgPrice = pos.avgPrice?.toString() ?: "0",
-                                currentValue = pos.currentValue?.toString() ?: "0",
-                                pnl = pos.cashPnl?.toString()
-                            )
-                        } ?: emptyList()
-                    } else {
-                        logger.warn("持仓信息查询失败: ${positionsResult.exceptionOrNull()?.message}")
-                        emptyList()
-                    }
-
-                    // 使用 /value 接口获取仓位总价值（而不是累加）
-                    val positionBalanceResult = blockchainService.getTotalValue(account.proxyAddress)
-                    val positionBalance = if (positionBalanceResult.isSuccess) {
-                        positionBalanceResult.getOrNull() ?: "0"
-                    } else {
-                        logger.warn("仓位总价值查询失败: ${positionBalanceResult.exceptionOrNull()?.message}")
-                        "0"
-                    }
-
-                    // 查询可用余额（通过 RPC 查询 USDC 余额）
-                    // 必须使用代理地址查询
-                    val availableBalanceResult = blockchainService.getUsdcBalance(
-                        walletAddress = account.walletAddress,
-                        proxyAddress = account.proxyAddress
-                    )
-                    val availableBalance = if (availableBalanceResult.isSuccess) {
-                        availableBalanceResult.getOrNull() ?: throw Exception("USDC 余额查询返回空值")
-                    } else {
-                        // 如果 RPC 查询失败，返回错误（不返回 mock 数据）
-                        val error = availableBalanceResult.exceptionOrNull()
-                        logger.error("USDC 可用余额 RPC 查询失败: ${error?.message}")
-                        throw Exception("USDC 可用余额查询失败: ${error?.message}。请确保已配置 Ethereum RPC URL")
-                    }
-
-                    // 计算总余额 = 可用余额 + 仓位余额
-                    val totalBalance = availableBalance.toSafeBigDecimal().add(positionBalance.toSafeBigDecimal())
-
-                    AccountBalanceResponse(
-                        availableBalance = availableBalance,
-                        positionBalance = positionBalance,
-                        totalBalance = totalBalance.toPlainString(),
-                        positions = positions
-                    )
-                } catch (e: Exception) {
-                    logger.error("查询余额失败: ${e.message}", e)
-                    throw e
-                }
+                blockchainService.getWalletBalance(account.proxyAddress)
             }
 
-            Result.success(balanceResult)
+            balanceResult.map { walletBalance: WalletBalanceResponse ->
+                AccountBalanceResponse(
+                    availableBalance = walletBalance.availableBalance,
+                    positionBalance = walletBalance.positionBalance,
+                    totalBalance = walletBalance.totalBalance,
+                    positions = walletBalance.positions
+                )
+            }
         } catch (e: Exception) {
             logger.error("查询账户余额失败", e)
             Result.failure(e)

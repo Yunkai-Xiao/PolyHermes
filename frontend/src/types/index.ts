@@ -80,6 +80,53 @@ export interface LeaderListResponse {
 }
 
 /**
+ * 持仓信息
+ */
+export interface PositionDto {
+  marketId: string
+  title: string  // 市场名称
+  side: string  // YES 或 NO
+  quantity: string
+  avgPrice: string
+  currentValue: string
+  pnl?: string
+}
+
+/**
+ * 钱包余额响应（通用类，用于 Account 和 Leader）
+ */
+export interface WalletBalanceResponse {
+  availableBalance: string  // 可用余额（RPC 查询的 USDC 余额）
+  positionBalance: string  // 仓位余额（持仓总价值）
+  totalBalance: string  // 总余额 = 可用余额 + 仓位余额
+  positions?: PositionDto[]
+}
+
+/**
+ * 账户余额响应
+ */
+export interface AccountBalanceResponse {
+  availableBalance: string  // 可用余额（RPC 查询的 USDC 余额）
+  positionBalance: string  // 仓位余额（持仓总价值）
+  totalBalance: string  // 总余额 = 可用余额 + 仓位余额
+  positions?: PositionDto[]
+}
+
+/**
+ * Leader 余额响应
+ */
+export interface LeaderBalanceResponse {
+  leaderId: number
+  leaderAddress: string
+  leaderName?: string
+  availableBalance: string  // 可用余额（RPC 查询的 USDC 余额）
+  positionBalance: string  // 仓位余额（持仓总价值）
+  totalBalance: string  // 总余额 = 可用余额 + 仓位余额
+  positions?: PositionDto[]
+}
+
+
+/**
  * Leader 添加请求
  */
 export interface LeaderAddRequest {
@@ -210,7 +257,6 @@ export interface CopyTrading {
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
   // 最大仓位配置
   maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
-  maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
   // 关键字过滤配置
   keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'  // 关键字过滤模式
   keywords?: string[]  // 关键字列表，当keywordFilterMode为DISABLED时为null
@@ -260,7 +306,6 @@ export interface CopyTradingCreateRequest {
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
   // 最大仓位配置
   maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
-  maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
   // 关键字过滤配置
   keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'  // 关键字过滤模式
   keywords?: string[]  // 关键字列表，当keywordFilterMode为DISABLED时为null
@@ -299,7 +344,6 @@ export interface CopyTradingUpdateRequest {
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
   // 最大仓位配置
   maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
-  maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
   // 关键字过滤配置
   keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'  // 关键字过滤模式
   keywords?: string[]  // 关键字列表，当keywordFilterMode为DISABLED时为null

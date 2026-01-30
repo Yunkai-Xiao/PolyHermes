@@ -8,9 +8,12 @@ import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.api.PositionResponse
 import com.wrbug.polymarketbot.api.ValueResponse
 import com.wrbug.polymarketbot.constants.PolymarketConstants
+import com.wrbug.polymarketbot.dto.PositionDto
+import com.wrbug.polymarketbot.dto.WalletBalanceResponse
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
+import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import com.wrbug.polymarketbot.service.system.RelayClientService
 import com.wrbug.polymarketbot.service.system.RpcNodeService
@@ -255,12 +258,87 @@ class BlockchainService(
                 return Result.failure(IllegalArgumentException("代理地址不能为空"))
             }
             
-            
             // 使用 RPC 查询 USDC 余额（使用代理地址）
             val balance = queryUsdcBalanceViaRpc(proxyAddress)
             Result.success(balance)
         } catch (e: Exception) {
             logger.error("查询 USDC 余额失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 查询钱包余额（通用方法）
+     * 用于 Account 和 Leader 的余额查询
+     * @param walletAddress 钱包地址（代理地址，Polymarket 使用代理地址存储资产）
+     * @return WalletBalanceResponse 包含可用余额、仓位余额、总余额和持仓列表
+     */
+    suspend fun getWalletBalance(walletAddress: String): Result<WalletBalanceResponse> {
+        return try {
+            if (walletAddress.isBlank()) {
+                logger.error("钱包地址为空，无法查询余额")
+                return Result.failure(IllegalArgumentException("钱包地址不能为空"))
+            }
+
+            // 1. 查询持仓信息（用于返回持仓列表）
+            val positionsResult = getPositions(walletAddress)
+            val positions = if (positionsResult.isSuccess) {
+                // 过滤掉价值为0的仓位
+                positionsResult.getOrNull()?.filter { pos ->
+                    val currentValue = pos.currentValue ?: 0.0
+                    currentValue > 0
+                }?.map { pos ->
+                    PositionDto(
+                        marketId = pos.conditionId ?: "",
+                        title = pos.title,
+                        side = pos.outcome ?: "",
+                        quantity = pos.size?.toString() ?: "0",
+                        avgPrice = pos.avgPrice?.toString() ?: "0",
+                        currentValue = pos.currentValue?.toString() ?: "0",
+                        pnl = pos.cashPnl?.toString()
+                    )
+                } ?: emptyList()
+            } else {
+                logger.warn("持仓信息查询失败: ${positionsResult.exceptionOrNull()?.message}")
+                emptyList()
+            }
+
+            // 2. 使用 /value 接口获取仓位总价值
+            val positionBalanceResult = getTotalValue(walletAddress)
+            val positionBalance = if (positionBalanceResult.isSuccess) {
+                positionBalanceResult.getOrNull() ?: "0"
+            } else {
+                logger.warn("仓位总价值查询失败: ${positionBalanceResult.exceptionOrNull()?.message}")
+                "0"
+            }
+
+            // 3. 查询可用余额（通过 RPC 查询 USDC 余额）
+            val availableBalanceResult = getUsdcBalance(
+                walletAddress = walletAddress,
+                proxyAddress = walletAddress
+            )
+            val availableBalance = if (availableBalanceResult.isSuccess) {
+                availableBalanceResult.getOrNull() ?: throw Exception("USDC 余额查询返回空值")
+            } else {
+                // 如果 RPC 查询失败，返回错误（不返回 mock 数据）
+                val error = availableBalanceResult.exceptionOrNull()
+                logger.error("USDC 可用余额 RPC 查询失败: ${error?.message}")
+                throw Exception("USDC 可用余额查询失败: ${error?.message}。请确保已配置 Ethereum RPC URL")
+            }
+
+            // 4. 计算总余额 = 可用余额 + 仓位余额
+            val totalBalance = availableBalance.toSafeBigDecimal().add(positionBalance.toSafeBigDecimal())
+
+            Result.success(
+                WalletBalanceResponse(
+                    availableBalance = availableBalance,
+                    positionBalance = positionBalance,
+                    totalBalance = totalBalance.toPlainString(),
+                    positions = positions
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("查询钱包余额失败: ${e.message}", e)
             Result.failure(e)
         }
     }

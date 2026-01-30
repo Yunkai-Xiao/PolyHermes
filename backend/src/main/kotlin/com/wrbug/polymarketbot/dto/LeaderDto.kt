@@ -37,6 +37,13 @@ data class LeaderListRequest(
 )
 
 /**
+ * Leader 余额请求
+ */
+data class LeaderBalanceRequest(
+    val leaderId: Long  // LeaderID（必需）
+)
+
+/**
  * Leader 信息响应
  */
 data class LeaderDto(
@@ -59,5 +66,18 @@ data class LeaderDto(
 data class LeaderListResponse(
     val list: List<LeaderDto>,
     val total: Long
+)
+
+/**
+ * Leader 余额响应
+ */
+data class LeaderBalanceResponse(
+    val leaderId: Long,
+    val leaderAddress: String,
+    val leaderName: String?,
+    val availableBalance: String,  // 可用余额（RPC 查询的 USDC 余额）
+    val positionBalance: String,  // 仓位余额（持仓总价值）
+    val totalBalance: String,  // 总余额 = 可用余额 + 仓位余额
+    val positions: List<PositionDto> = emptyList()
 )
 

@@ -5,10 +5,12 @@ import com.wrbug.polymarketbot.entity.Leader
 import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.repository.CopyTradingRepository
 import com.wrbug.polymarketbot.repository.LeaderRepository
+import com.wrbug.polymarketbot.service.common.BlockchainService
 import com.wrbug.polymarketbot.util.CategoryValidator
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import kotlinx.coroutines.runBlocking
 
 /**
  * Leader 管理服务
@@ -17,7 +19,8 @@ import org.springframework.transaction.annotation.Transactional
 class LeaderService(
     private val leaderRepository: LeaderRepository,
     private val accountRepository: AccountRepository,
-    private val copyTradingRepository: CopyTradingRepository
+    private val copyTradingRepository: CopyTradingRepository,
+    private val blockchainService: BlockchainService
 ) {
     
     private val logger = LoggerFactory.getLogger(LeaderService::class.java)
@@ -176,11 +179,45 @@ class LeaderService(
         return try {
             val leader = leaderRepository.findById(leaderId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException("Leader 不存在"))
-            
+
             val copyTradingCount = copyTradingRepository.countByLeaderId(leaderId)
             Result.success(toDto(leader, copyTradingCount))
         } catch (e: Exception) {
             logger.error("查询 Leader 详情失败", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 查询 Leader 余额
+     * 使用代理地址查询 USDC 余额和持仓信息
+     */
+    fun getLeaderBalance(leaderId: Long): Result<LeaderBalanceResponse> {
+        return try {
+            val leader = leaderRepository.findById(leaderId).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("Leader 不存在"))
+
+            // Leader 的 leaderAddress 就是代理地址
+            val walletAddress = leader.leaderAddress
+
+            // 使用通用方法查询余额
+            val balanceResult = runBlocking {
+                blockchainService.getWalletBalance(walletAddress)
+            }
+
+            balanceResult.map { walletBalance: WalletBalanceResponse ->
+                LeaderBalanceResponse(
+                    leaderId = leader.id!!,
+                    leaderAddress = leader.leaderAddress,
+                    leaderName = leader.leaderName,
+                    availableBalance = walletBalance.availableBalance,
+                    positionBalance = walletBalance.positionBalance,
+                    totalBalance = walletBalance.totalBalance,
+                    positions = walletBalance.positions
+                )
+            }
+        } catch (e: Exception) {
+            logger.error("查询 Leader 余额失败", e)
             Result.failure(e)
         }
     }

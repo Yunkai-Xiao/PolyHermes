@@ -292,32 +292,38 @@ export const apiService = {
     /**
      * 添加 Leader
      */
-    add: (data: { leaderAddress: string; leaderName?: string; remark?: string; website?: string; category?: string }) => 
+    add: (data: { leaderAddress: string; leaderName?: string; remark?: string; website?: string; category?: string }) =>
       apiClient.post<ApiResponse<any>>('/copy-trading/leaders/add', data),
-    
+
     /**
      * 更新 Leader
      */
-    update: (data: { leaderId: number; leaderName?: string; remark?: string; website?: string; category?: string }) => 
+    update: (data: { leaderId: number; leaderName?: string; remark?: string; website?: string; category?: string }) =>
       apiClient.post<ApiResponse<any>>('/copy-trading/leaders/update', data),
-    
+
     /**
      * 删除 Leader
      */
-    delete: (data: { leaderId: number }) => 
+    delete: (data: { leaderId: number }) =>
       apiClient.post<ApiResponse<void>>('/copy-trading/leaders/delete', data),
-    
+
     /**
      * 查询 Leader 列表
      */
-    list: (data: { category?: string } = {}) => 
+    list: (data: { category?: string } = {}) =>
       apiClient.post<ApiResponse<any>>('/copy-trading/leaders/list', data),
-    
+
     /**
      * 查询 Leader 详情
      */
-    detail: (data: { leaderId: number }) => 
-      apiClient.post<ApiResponse<any>>('/copy-trading/leaders/detail', data)
+    detail: (data: { leaderId: number }) =>
+      apiClient.post<ApiResponse<any>>('/copy-trading/leaders/detail', data),
+
+    /**
+     * 查询 Leader 余额
+     */
+    balance: (data: { leaderId: number }) =>
+      apiClient.post<ApiResponse<any>>('/copy-trading/leaders/balance', data)
   },
   
   /**
