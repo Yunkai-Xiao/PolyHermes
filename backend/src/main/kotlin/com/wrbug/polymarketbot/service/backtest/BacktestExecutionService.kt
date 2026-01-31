@@ -590,7 +590,11 @@ class BacktestExecutionService(
         var maxLoss = BigDecimal.ZERO
 
         // 计算最大回撤
-        var runningBalance = trades[0]?.balanceAfter?.toSafeBigDecimal() ?: BigDecimal.ZERO
+        var runningBalance = if (trades.isNotEmpty()) {
+            trades[0].balanceAfter?.toSafeBigDecimal() ?: BigDecimal.ZERO
+        } else {
+            BigDecimal.ZERO
+        }
         var peakBalance = runningBalance
         var maxDrawdown = BigDecimal.ZERO
 
