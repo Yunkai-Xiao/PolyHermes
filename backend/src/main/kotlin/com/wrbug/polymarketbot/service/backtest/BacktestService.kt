@@ -47,7 +47,12 @@ class BacktestService(
                 return Result.failure(IllegalArgumentException("回测天数必须在 1-15 之间"))
             }
 
-            // 3. 验证初始金额
+            // 3. 验证恢复页码（如果提供）
+            if (request.pageForResume != null && request.pageForResume < 1) {
+                return Result.failure(IllegalArgumentException("恢复页码必须大于 0"))
+            }
+
+            // 4. 验证初始金额
             val initialBalance = request.initialBalance.toSafeBigDecimal()
             if (initialBalance <= BigDecimal.ZERO) {
                 return Result.failure(IllegalArgumentException("初始金额必须大于 0"))
@@ -70,21 +75,13 @@ class BacktestService(
                 minOrderSize = request.minOrderSize?.toSafeBigDecimal() ?: "1".toSafeBigDecimal(),
                 maxDailyLoss = request.maxDailyLoss?.toSafeBigDecimal() ?: "10000".toSafeBigDecimal(),
                 maxDailyOrders = request.maxDailyOrders ?: 100,
-                priceTolerance = request.priceTolerance?.toSafeBigDecimal() ?: "5".toSafeBigDecimal(),
-                delaySeconds = request.delaySeconds ?: 0,
                 supportSell = request.supportSell ?: true,
-                minOrderDepth = request.minOrderDepth?.toSafeBigDecimal(),
-                maxSpread = request.maxSpread?.toSafeBigDecimal(),
-                minPrice = request.minPrice?.toSafeBigDecimal(),
-                maxPrice = request.maxPrice?.toSafeBigDecimal(),
-                maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
                 keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                 keywords = if (request.keywords != null && request.keywords.isNotEmpty()) {
                     request.keywords.toJson()
                 } else {
                     null
-                },
-                maxMarketEndDate = request.maxMarketEndDate
+                }
             )
 
             backtestTaskRepository.save(task)
@@ -187,21 +184,13 @@ class BacktestService(
                 minOrderSize = task.minOrderSize.toPlainString(),
                 maxDailyLoss = task.maxDailyLoss.toPlainString(),
                 maxDailyOrders = task.maxDailyOrders,
-                priceTolerance = task.priceTolerance.toPlainString(),
-                delaySeconds = task.delaySeconds,
                 supportSell = task.supportSell,
-                minOrderDepth = task.minOrderDepth?.toPlainString(),
-                maxSpread = task.maxSpread?.toPlainString(),
-                minPrice = task.minPrice?.toPlainString(),
-                maxPrice = task.maxPrice?.toPlainString(),
-                maxPositionValue = task.maxPositionValue?.toPlainString(),
                 keywordFilterMode = task.keywordFilterMode,
                 keywords = if (task.keywords != null) {
                     task.keywords.fromJson<List<String>>()
                 } else {
                     emptyList()
-                },
-                maxMarketEndDate = task.maxMarketEndDate
+                }
             )
 
             val statistics = BacktestStatisticsDto(
@@ -291,7 +280,7 @@ class BacktestService(
                 ?: return Result.failure(IllegalArgumentException("回测任务不存在"))
 
             if (task.status == "RUNNING") {
-                return Result.failure(IllegalArgumentException("回测任务正在运行，无法删除"))
+                return Result.failure(IllegalStateException("回测任务正在运行，无法删除"))
             }
 
             backtestTaskRepository.deleteById(request.id)
@@ -322,6 +311,35 @@ class BacktestService(
             Result.success(Unit)
         } catch (e: Exception) {
             logger.error("停止回测任务失败", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 重试回测任务
+     * 从断点继续执行，保留已处理的交易记录
+     */
+    @Transactional
+    fun retryBacktestTask(request: BacktestRetryRequest): Result<Unit> {
+        return try {
+            val task = backtestTaskRepository.findById(request.id).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("回测任务不存在"))
+
+            if (task.status == "RUNNING") {
+                return Result.failure(IllegalArgumentException("回测任务正在运行中，无需重试"))
+            }
+
+            // 重置任务状态为 PENDING，进度保持不变
+            task.status = "PENDING"
+            task.errorMessage = null
+            task.updatedAt = System.currentTimeMillis()
+
+            // 不清理已处理的交易记录，保留恢复点
+            backtestTaskRepository.save(task)
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            logger.error("重试回测任务失败", e)
             Result.failure(e)
         }
     }

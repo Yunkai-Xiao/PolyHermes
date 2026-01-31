@@ -247,7 +247,8 @@ enum class ErrorCode(
     SERVER_BACKTEST_TRADES_FETCH_FAILED(5608, "查询回测交易记录失败", "error.server.backtest_trades_fetch_failed"),
     SERVER_BACKTEST_EXECUTE_FAILED(5609, "回测执行失败", "error.server.backtest_execute_failed"),
     SERVER_BACKTEST_HISTORICAL_DATA_FETCH_FAILED(5610, "历史数据获取失败", "error.server.backtest_historical_data_fetch_failed"),
-    SERVER_BACKTEST_STOP_FAILED(5611, "停止回测任务失败", "error.server.backtest_stop_failed");
+    SERVER_BACKTEST_STOP_FAILED(5611, "停止回测任务失败", "error.server.backtest_stop_failed"),
+    SERVER_BACKTEST_RETRY_FAILED(5612, "重试回测任务失败", "error.server.backtest_retry_failed");
     
     companion object {
         /**

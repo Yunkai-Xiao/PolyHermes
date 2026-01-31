@@ -34,11 +34,37 @@ class BacktestPollingService(
         try {
             logger.debug("开始轮询待执行的回测任务")
 
-            // 1. 检查是否有正在执行的任务，如果有则跳过本次轮询
+            // 1. 检查是否有长时间处于 RUNNING 状态的任务（可能是应用重启导致的）
             val runningTasks = backtestTaskRepository.findByStatus("RUNNING")
             if (runningTasks.isNotEmpty()) {
+                val activeQueueSize = (executor as ThreadPoolExecutor).queue.size
+                val activeCount = (executor as ThreadPoolExecutor).activeCount
+
+                // 如果有线程池中没有活跃任务但有 RUNNING 状态的任务，说明是应用重启导致的
+                // 重置这些任务的状态为 PENDING，以便恢复执行
+                if (activeCount == 0 && runningTasks.isNotEmpty()) {
+                    logger.info("检测到应用重启导致的异常 RUNNING 任务，重置为 PENDING 以便恢复")
+                    runningTasks.forEach { task ->
+                        val now = System.currentTimeMillis()
+                        val executionStartedAt = task.executionStartedAt
+                        val executionDuration = if (executionStartedAt != null) {
+                            now - executionStartedAt
+                        } else {
+                            0L
+                        }
+
+                        // 如果任务执行时间超过 1 分钟，认为是异常状态
+                        if (executionDuration > 60000) {
+                            logger.info("重置异常 RUNNING 任务: taskId=${task.id}, executionStartedAt=$executionStartedAt, duration=${executionDuration}ms")
+                            task.status = "PENDING"
+                            task.updatedAt = now
+                            backtestTaskRepository.save(task)
+                        }
+                    }
+                } else {
                 logger.debug("有 ${runningTasks.size} 个任务正在执行，跳过本次轮询")
                 return
+                }
             }
 
             // 2. 查询所有 PENDING 状态的任务，按创建时间升序排序
@@ -65,7 +91,31 @@ class BacktestPollingService(
                     }
 
                     runBlocking {
-                        executionService.executeBacktest(currentTask)
+                        // 支持恢复：如果有恢复点，计算从哪一页开始
+                        val pageSize = 100
+                        val page = if (currentTask.lastProcessedTradeIndex != null && currentTask.lastProcessedTradeIndex >= 0) {
+                            // 从第几页开始（页码从 1 开始）
+                            // 例如：已处理了99笔，lastProcessedTradeIndex=99，应从第2页开始
+                            // 例如：已处理了0笔，lastProcessedTradeIndex=0，应从第1页开始（因为第1页的第1笔已经处理）
+                            val lastProcessedIndex = currentTask.lastProcessedTradeIndex
+                            val calculatedPage = (lastProcessedIndex / pageSize) + 1
+
+                            // 特殊情况：如果lastProcessedTradeIndex刚好是100的倍数减1（比如99,199,299...）
+                            // 说明该页已经完全处理，应该从下一页开始
+                            val nextPage = if (lastProcessedIndex % pageSize == pageSize - 1) {
+                                calculatedPage + 1
+                            } else {
+                                calculatedPage
+                            }
+
+                            logger.info("恢复任务：已处理索引=$lastProcessedIndex, 计算页码=$nextPage, size=$pageSize")
+                            nextPage
+                        } else {
+                            1  // 从第一页开始
+                        }
+
+                        logger.info("执行回测任务: taskId=${currentTask.id}, page=$page, size=$pageSize")
+                        executionService.executeBacktest(currentTask, page = page, size = pageSize)
                     }
                 } catch (e: Exception) {
                     logger.error("回测任务执行失败: taskId=${taskToExecute.id}", e)

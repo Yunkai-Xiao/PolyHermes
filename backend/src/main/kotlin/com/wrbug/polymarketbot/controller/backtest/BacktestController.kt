@@ -148,6 +148,7 @@ class BacktestController(
                     logger.error("删除回测任务失败", e)
                     val errorCode = when (e) {
                         is IllegalArgumentException -> ErrorCode.BACKTEST_TASK_NOT_FOUND
+                        is IllegalStateException -> ErrorCode.BACKTEST_TASK_RUNNING
                         else -> ErrorCode.SERVER_BACKTEST_DELETE_FAILED
                     }
                     ResponseEntity.ok(ApiResponse.error(errorCode, e.message, messageSource))
@@ -187,6 +188,37 @@ class BacktestController(
         } catch (e: Exception) {
             logger.error("停止回测任务异常", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_STOP_FAILED, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 重试回测任务
+     */
+    @PostMapping("/tasks/retry")
+    fun retryBacktestTask(@RequestBody request: BacktestRetryRequest): ResponseEntity<ApiResponse<Unit>> {
+        return try {
+            logger.info("重试回测任务: taskId=${request.id}")
+
+            val result = backtestService.retryBacktestTask(request)
+
+            result.fold(
+                onSuccess = {
+                    logger.info("回测任务重试成功: taskId=${request.id}")
+                    ResponseEntity.ok(ApiResponse.success(Unit))
+                },
+                onFailure = { e ->
+                    logger.error("重试回测任务失败", e)
+                    val errorCode = when (e) {
+                        is IllegalArgumentException -> ErrorCode.BACKTEST_TASK_NOT_FOUND
+                        is IllegalStateException -> ErrorCode.BACKTEST_TASK_RUNNING
+                        else -> ErrorCode.SERVER_BACKTEST_RETRY_FAILED
+                    }
+                    ResponseEntity.ok(ApiResponse.error(errorCode, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("重试回测任务异常", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_RETRY_FAILED, e.message, messageSource))
         }
     }
 }

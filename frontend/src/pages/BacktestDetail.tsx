@@ -6,12 +6,14 @@ import { useTranslation } from 'react-i18next'
 import { formatUSDC } from '../utils'
 import { backtestService } from '../services/api'
 import type { BacktestTaskDto, BacktestConfigDto, BacktestStatisticsDto, BacktestTradeDto } from '../types/backtest'
+import { useMediaQuery } from 'react-responsive'
 import BacktestChart from './BacktestChart'
 
 const BacktestDetail: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
+  const isMobile = useMediaQuery({ maxWidth: 768 })
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<BacktestTaskDto | null>(null)
   const [, setConfig] = useState<BacktestConfigDto | null>(null)
@@ -66,33 +68,30 @@ const BacktestDetail: React.FC = () => {
     }
   }
 
+  // 初始加载任务详情和交易记录
   useEffect(() => {
     fetchTaskDetail()
     fetchTrades(tradesPage)
+  }, [id])
 
-    // 如果任务正在运行，启动轮询
-    const startPolling = () => {
+  // 根据任务状态控制轮询
+  useEffect(() => {
+    // 停止之前的轮询
+    stopPolling()
+
+    // 只有任务正在运行或待处理时才启动轮询
+    if (task?.status === 'RUNNING' || task?.status === 'PENDING') {
       const timer = setInterval(() => {
         fetchTaskDetail()
-        // 如果任务已完成或失败，停止轮询
-        if (task?.status === 'COMPLETED' || task?.status === 'FAILED' || task?.status === 'STOPPED') {
-          stopPolling()
-        }
       }, 3000) // 每3秒轮询一次
       setPolling(timer)
     }
 
-    // 延迟启动轮询，等待任务状态加载完成
-    setTimeout(() => {
-      if (task?.status === 'RUNNING' || task?.status === 'PENDING') {
-        startPolling()
-      }
-    }, 1000)
-
+    // 组件卸载或状态变化时清理定时器
     return () => {
       stopPolling()
     }
-  }, [id, task?.status])
+  }, [task?.status])
 
   const stopPolling = () => {
     if (polling) {
@@ -137,6 +136,7 @@ const BacktestDetail: React.FC = () => {
         const response = await backtestService.delete({ id: parseInt(id!) })
         if (response.data.code === 0) {
           message.success(t('backtest.deleteSuccess'))
+          stopPolling() // 停止轮询
           navigate('/backtest')
         } else {
           message.error(response.data.msg || t('backtest.deleteFailed'))
@@ -275,23 +275,23 @@ const BacktestDetail: React.FC = () => {
       <Card>
         {/* 头部操作栏 */}
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <Space>
-              <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+              <Button icon={<ArrowLeftOutlined />} onClick={handleBack} size={isMobile ? 'middle' : 'large'}>
                 {t('common.back')}
               </Button>
-              <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
+              <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading} size={isMobile ? 'middle' : 'large'}>
                 {t('common.refresh')}
               </Button>
             </Space>
             <Space>
               {(task.status === 'RUNNING' || task.status === 'PENDING') && (
-                <Button danger icon={<StopOutlined />} onClick={handleStop}>
-                  {t('backtest.statusStopped')}
+                <Button danger icon={<StopOutlined />} onClick={handleStop} size={isMobile ? 'middle' : 'large'}>
+                  {t('backtest.stop')}
                 </Button>
               )}
               {(task.status === 'COMPLETED' || task.status === 'STOPPED' || task.status === 'FAILED') && (
-                <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
+                <Button danger icon={<DeleteOutlined />} onClick={handleDelete} size={isMobile ? 'middle' : 'large'}>
                   {t('common.delete')}
                 </Button>
               )}
@@ -300,7 +300,7 @@ const BacktestDetail: React.FC = () => {
 
           {/* 任务基本信息 */}
           <Card title={t('backtest.taskDetail')} size="small">
-            <Descriptions column={2} bordered size="small">
+            <Descriptions column={isMobile ? 1 : 2} bordered size="small">
               <Descriptions.Item label={t('backtest.taskName')}>{task.taskName}</Descriptions.Item>
               <Descriptions.Item label={t('backtest.leader')}>
                 {task.leaderName || task.leaderAddress}
@@ -348,7 +348,7 @@ const BacktestDetail: React.FC = () => {
           {/* 统计信息 */}
           {statistics && (
             <Row gutter={16}>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.buyTrades')}
@@ -356,7 +356,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.sellTrades')}
@@ -364,7 +364,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.winTrades')}
@@ -373,7 +373,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.lossTrades')}
@@ -382,7 +382,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.winRate')}
@@ -392,7 +392,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.maxProfit')}
@@ -401,7 +401,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.maxLoss')}
@@ -410,7 +410,7 @@ const BacktestDetail: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col xs={24} sm={12} md={12} lg={6}>
                 <Card>
                   <Statistic
                     title={t('backtest.maxDrawdown')}
@@ -420,7 +420,7 @@ const BacktestDetail: React.FC = () => {
                 </Card>
               </Col>
               {statistics.avgHoldingTime && (
-                <Col span={6}>
+                <Col xs={24} sm={12} md={12} lg={6}>
                   <Card>
                     <Statistic
                       title={t('backtest.avgHoldingTime')}
@@ -458,7 +458,7 @@ const BacktestDetail: React.FC = () => {
                   fetchTrades(newPage)
                 }
               }}
-              scroll={{ x: 1800 }}
+              scroll={isMobile ? { x: 1200 } : { x: 1800 }}
             />
           </Card>
         </Space>

@@ -792,6 +792,11 @@ export const backtestService = {
   /**
    * 删除回测任务
    */
-  delete: (data: { id: number }) => apiClient.post('/backtest/tasks/delete', data)
+  delete: (data: { id: number }) => apiClient.post('/backtest/tasks/delete', data),
+
+  /**
+   * 重试回测任务
+   */
+  retry: (data: { id: number }) => apiClient.post('/backtest/tasks/retry', data)
 }
 

@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.BigInteger
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 
 /**
  * 市场价格服务
@@ -26,6 +28,21 @@ class MarketPriceService(
 ) {
     
     private val logger = LoggerFactory.getLogger(MarketPriceService::class.java)
+    
+    /**
+     * 已结算市场的价格缓存
+     * Key: "marketId:outcomeIndex"
+     * Value: BigDecimal (1.0 或 0.0)
+     * 
+     * 缓存策略：
+     * - 最大缓存 10,000 个已结算市场
+     * - 永不过期（已结算的市场状态永不改变）
+     * - 内存占用约: 10,000 * ~100 bytes = ~1MB
+     */
+    private val settledMarketCache: Cache<String, BigDecimal> = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .recordStats()  // 启用统计信息
+        .build()
     
     /**
      * 获取当前市场最新价
@@ -83,9 +100,20 @@ class MarketPriceService(
      *   - payout == 0（输了）→ 返回 0.0
      * 如果市场未结算或查询失败，返回 null
      * 
+     * 使用缓存优化：已结算的市场结果会被缓存，避免重复 RPC 调用
+     * 
      * @return Pair<BigDecimal?, Boolean> 第一个值是价格（如果已结算），第二个值表示是否发生了 RPC 错误（execution reverted）
      */
     private suspend fun getPriceFromChainCondition(marketId: String, outcomeIndex: Int): Pair<BigDecimal?, Boolean> {
+        // 1. 先检查缓存
+        val cacheKey = "$marketId:$outcomeIndex"
+        val cachedPrice = settledMarketCache.getIfPresent(cacheKey)
+        if (cachedPrice != null) {
+            logger.debug("从缓存获取已结算市场价格: marketId=$marketId, outcomeIndex=$outcomeIndex, price=$cachedPrice")
+            return Pair(cachedPrice, false)
+        }
+        
+        // 2. 缓存未命中，发起 RPC 查询
         return try {
             val chainResult = blockchainService.getCondition(marketId)
             chainResult.fold(
@@ -96,11 +124,17 @@ class MarketPriceService(
                         when {
                             payout > BigInteger.ZERO -> {
                                 logger.info("从链上查询到市场已结算，该 outcome 赢了: marketId=$marketId, outcomeIndex=$outcomeIndex, payout=$payout")
-                                return Pair(BigDecimal.ONE, false)
+                                val price = BigDecimal.ONE
+                                // 缓存已结算的结果
+                                settledMarketCache.put(cacheKey, price)
+                                return Pair(price, false)
                             }
                             payout == BigInteger.ZERO -> {
                                 logger.info("从链上查询到市场已结算，该 outcome 输了: marketId=$marketId, outcomeIndex=$outcomeIndex, payout=$payout")
-                                return Pair(BigDecimal.ZERO, false)
+                                val price = BigDecimal.ZERO
+                                // 缓存已结算的结果
+                                settledMarketCache.put(cacheKey, price)
+                                return Pair(price, false)
                             }
                             else -> {
                                 logger.warn("从链上查询到异常的 payout 值: marketId=$marketId, outcomeIndex=$outcomeIndex, payout=$payout")
@@ -109,7 +143,7 @@ class MarketPriceService(
                         }
                     } else {
                         logger.debug("从链上查询到市场尚未结算: marketId=$marketId, payouts=${payouts.size}")
-                        Pair(null, false)
+                        Pair(null, false)  // 未结算的市场不缓存
                     }
                 },
                 onFailure = { e ->
@@ -288,6 +322,30 @@ class MarketPriceService(
             logger.debug("获取带鉴权的 CLOB API 失败: ${e.message}")
             null
         }
+    }
+    
+    /**
+     * 获取缓存统计信息
+     * 用于监控缓存命中率和性能
+     */
+    fun getCacheStats(): String {
+        val stats = settledMarketCache.stats()
+        return """
+            已结算市场缓存统计:
+            - 缓存条目数: ${settledMarketCache.estimatedSize()}
+            - 命中次数: ${stats.hitCount()}
+            - 未命中次数: ${stats.missCount()}
+            - 命中率: ${"%.2f".format(stats.hitRate() * 100)}%
+            - 总请求次数: ${stats.requestCount()}
+        """.trimIndent()
+    }
+    
+    /**
+     * 清空缓存（测试或管理用）
+     */
+    fun clearSettledMarketCache() {
+        settledMarketCache.invalidateAll()
+        logger.info("已清空已结算市场缓存")
     }
     
 }

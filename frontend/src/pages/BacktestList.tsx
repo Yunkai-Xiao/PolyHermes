@@ -2,17 +2,19 @@ import { useState, useEffect } from 'react'
 import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
 import { backtestService, apiService } from '../services/api'
 import type { BacktestTaskDto, BacktestListRequest, BacktestCreateRequest } from '../types/backtest'
 import type { Leader } from '../types'
+import { useMediaQuery } from 'react-responsive'
 
 const { Option } = Select
 
 const BacktestList: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const isMobile = useMediaQuery({ maxWidth: 768 })
   const [loading, setLoading] = useState(false)
   const [tasks, setTasks] = useState<BacktestTaskDto[]>([])
   const [total, setTotal] = useState(0)
@@ -22,7 +24,7 @@ const BacktestList: React.FC = () => {
   const [leaderIdFilter] = useState<number | undefined>()
   const [sortBy, setSortBy] = useState<'profitAmount' | 'profitRate' | 'createdAt'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  
+
   // 创建回测 modal 相关状态
   const [createModalVisible, setCreateModalVisible] = useState(false)
   const [createForm] = Form.useForm()
@@ -112,6 +114,29 @@ const BacktestList: React.FC = () => {
     })
   }
 
+  // 重试任务
+  const handleRetry = (id: number) => {
+    Modal.confirm({
+      title: t('backtest.retryConfirm'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          const response = await backtestService.retry({ id })
+          if (response.data.code === 0) {
+            message.success(t('backtest.retrySuccess'))
+            fetchTasks()
+          } else {
+            message.error(response.data.msg || t('backtest.retryFailed'))
+          }
+        } catch (error) {
+          console.error('Failed to retry backtest task:', error)
+          message.error(t('backtest.retryFailed'))
+        }
+      }
+    })
+  }
+
   // 获取 Leader 列表
   useEffect(() => {
     if (createModalVisible) {
@@ -145,8 +170,6 @@ const BacktestList: React.FC = () => {
       minOrderSize: 1,
       maxDailyLoss: 500,
       maxDailyOrders: 50,
-      priceTolerance: 5,
-      delaySeconds: 0,
       supportSell: true,
       keywordFilterMode: 'DISABLED',
       backtestDays: 7
@@ -172,17 +195,9 @@ const BacktestList: React.FC = () => {
         minOrderSize: values.minOrderSize,
         maxDailyLoss: values.maxDailyLoss,
         maxDailyOrders: values.maxDailyOrders,
-        priceTolerance: values.priceTolerance,
-        delaySeconds: values.delaySeconds,
         supportSell: values.supportSell,
-        minOrderDepth: values.minOrderDepth,
-        maxSpread: values.maxSpread,
-        minPrice: values.minPrice,
-        maxPrice: values.maxPrice,
-        maxPositionValue: values.maxPositionValue,
         keywordFilterMode: values.keywordFilterMode,
-        keywords: values.keywords,
-        maxMarketEndDate: values.maxMarketEndDate
+        keywords: values.keywords
       }
 
       const response = await backtestService.create(request)
@@ -231,14 +246,14 @@ const BacktestList: React.FC = () => {
       title: t('backtest.taskName'),
       dataIndex: 'taskName',
       key: 'taskName',
-      width: 150
+      width: isMobile ? 120 : 150
     },
     {
       title: t('backtest.leader'),
       dataIndex: 'leaderName',
       key: 'leaderName',
-      width: 150,
-      render: (_: any, record: BacktestTaskDto) => record.leaderName || record.leaderAddress || '-'
+      width: isMobile ? 100 : 150,
+      render: (_: any, record: BacktestTaskDto) => record.leaderName || record.leaderAddress?.substring(0, 8) + '...' || '-'
     },
     {
       title: t('backtest.initialBalance'),
@@ -324,14 +339,14 @@ const BacktestList: React.FC = () => {
       title: t('backtest.createdAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
-      width: 180,
+      width: isMobile ? 150 : 180,
       render: (timestamp: number) => new Date(timestamp).toLocaleString()
     },
     {
       title: t('common.actions'),
       key: 'actions',
-      fixed: 'right' as const,
-      width: 150,
+      fixed: isMobile ? false : ('right' as const),
+      width: isMobile ? 100 : 150,
       render: (_: any, record: BacktestTaskDto) => (
         <Space size="small">
           <Button
@@ -342,7 +357,7 @@ const BacktestList: React.FC = () => {
           >
             {t('common.viewDetail')}
           </Button>
-          {(record.status === 'RUNNING' || record.status === 'PENDING') && (
+          {record.status === 'RUNNING' && (
             <Button
               type="link"
               size="small"
@@ -350,10 +365,20 @@ const BacktestList: React.FC = () => {
               icon={<StopOutlined />}
               onClick={() => handleStop(record.id)}
             >
-              {t('backtest.statusStopped')}
+              {t('backtest.stop')}
             </Button>
           )}
-          {(record.status === 'COMPLETED' || record.status === 'STOPPED' || record.status === 'FAILED') && (
+          {(record.status === 'STOPPED' || record.status === 'FAILED') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<RedoOutlined />}
+              onClick={() => handleRetry(record.id)}
+            >
+              {t('backtest.retry')}
+            </Button>
+          )}
+          {(record.status === 'PENDING' || record.status === 'COMPLETED') && (
             <Button
               type="link"
               size="small"
@@ -374,11 +399,11 @@ const BacktestList: React.FC = () => {
       <Card>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           {/* 头部操作栏 */}
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Space size="middle">
+          <Row justify="space-between" align="middle" gutter={[16, 16]}>
+            <Col xs={24} sm={24} md={12} lg={16}>
+              <Space size="middle" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
                 <Select
-                  style={{ width: 150 }}
+                  style={{ width: isMobile ? '100%' : 150 }}
                   placeholder={t('backtest.status')}
                   allowClear
                   onChange={(value) => setStatusFilter(value)}
@@ -391,7 +416,7 @@ const BacktestList: React.FC = () => {
                   <Select.Option value="FAILED">{t('backtest.statusFailed')}</Select.Option>
                 </Select>
                 <Select
-                  style={{ width: 150 }}
+                  style={{ width: isMobile ? '100%' : 150 }}
                   placeholder={t('backtest.sortBy')}
                   onChange={(value) => setSortBy(value)}
                   value={sortBy}
@@ -401,7 +426,7 @@ const BacktestList: React.FC = () => {
                   <Select.Option value="createdAt">{t('backtest.createdAt')}</Select.Option>
                 </Select>
                 <Select
-                  style={{ width: 120 }}
+                  style={{ width: isMobile ? '100%' : 120 }}
                   placeholder={t('backtest.sortOrder')}
                   onChange={(value) => setSortOrder(value)}
                   value={sortOrder}
@@ -411,19 +436,21 @@ const BacktestList: React.FC = () => {
                 </Select>
               </Space>
             </Col>
-            <Col>
-              <Space>
+            <Col xs={24} sm={24} md={12} lg={8} style={{ textAlign: isMobile ? 'left' : 'right' }}>
+              <Space style={{ width: isMobile ? '100%' : 'auto' }}>
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
                   onClick={handleCreate}
+                  style={{ flex: isMobile ? 1 : undefined }}
                 >
-                  {t('backtest.createTask')}
+                  {isMobile ? t('common.create') : t('backtest.createTask')}
                 </Button>
                 <Button
                   icon={<ReloadOutlined />}
                   onClick={handleRefresh}
                   loading={loading}
+                  style={{ flex: isMobile ? 1 : undefined }}
                 >
                   {t('common.refresh')}
                 </Button>
@@ -443,9 +470,10 @@ const BacktestList: React.FC = () => {
               total,
               showSizeChanger: false,
               showTotal: (total) => `${t('common.total')} ${total} ${t('common.items')}`,
-              onChange: (newPage) => setPage(newPage)
+              onChange: (newPage) => setPage(newPage),
+              simple: isMobile
             }}
-            scroll={{ x: 1400 }}
+            scroll={isMobile ? { x: 1200 } : { x: 1400 }}
           />
         </Space>
       </Card>
@@ -461,31 +489,25 @@ const BacktestList: React.FC = () => {
         onOk={handleCreateSubmit}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
-        width={800}
+        width={isMobile ? '95%' : 800}
         confirmLoading={createLoading}
         destroyOnClose
-        style={{ top: 20 }}
-        bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+        style={{ top: isMobile ? 10 : 20 }}
+        bodyStyle={{ maxHeight: isMobile ? 'calc(100vh - 150px)' : 'calc(100vh - 200px)', overflowY: 'auto' }}
       >
         <Form
           form={createForm}
           layout="vertical"
           initialValues={{
-            copyMode: 'RATIO',
-            copyRatio: 100, // 默认 100%（显示为百分比）
-            maxOrderSize: 1000,
-            minOrderSize: 1,
             maxDailyLoss: 500,
             maxDailyOrders: 50,
-            priceTolerance: 5,
-            delaySeconds: 0,
             supportSell: true,
             keywordFilterMode: 'DISABLED',
             backtestDays: 7
           }}
         >
           <Row gutter={24}>
-            <Col span={12}>
+            <Col xs={24} sm={24} md={12}>
               <Form.Item
                 label={t('backtest.taskName')}
                 name="taskName"
@@ -494,7 +516,7 @@ const BacktestList: React.FC = () => {
                 <Input placeholder={t('backtest.taskName')} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={24} md={12}>
               <Form.Item
                 label={t('backtest.leader')}
                 name="leaderId"
@@ -512,7 +534,7 @@ const BacktestList: React.FC = () => {
           </Row>
 
           <Row gutter={24}>
-            <Col span={12}>
+            <Col xs={24} sm={24} md={12}>
               <Form.Item
                 label={t('backtest.initialBalance') + ' (USDC)'}
                 name="initialBalance"
@@ -529,7 +551,7 @@ const BacktestList: React.FC = () => {
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={24} md={12}>
               <Form.Item
                 label={t('backtest.backtestDays') + ` (1-15 ${t('common.day')})`}
                 name="backtestDays"
@@ -616,7 +638,7 @@ const BacktestList: React.FC = () => {
             )}
 
             <Row gutter={24}>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Form.Item
                   label={t('backtest.maxOrderSize') + ' (USDC)'}
                   name="maxOrderSize"
@@ -625,7 +647,7 @@ const BacktestList: React.FC = () => {
                   <InputNumber style={{ width: '100%' }} precision={2} min={1} />
                 </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Form.Item
                   label={t('backtest.minOrderSize') + ' (USDC)'}
                   name="minOrderSize"
@@ -637,7 +659,7 @@ const BacktestList: React.FC = () => {
             </Row>
 
             <Row gutter={24}>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Form.Item
                   label={t('backtest.maxDailyLoss') + ' (USDC)'}
                   name="maxDailyLoss"
@@ -646,7 +668,7 @@ const BacktestList: React.FC = () => {
                   <InputNumber style={{ width: '100%' }} precision={2} min={0} />
                 </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Form.Item
                   label={t('backtest.maxDailyOrders')}
                   name="maxDailyOrders"
@@ -658,74 +680,12 @@ const BacktestList: React.FC = () => {
             </Row>
 
             <Form.Item
-              label={t('backtest.priceTolerance') + ' (%)'}
-              name="priceTolerance"
-            >
-              <InputNumber style={{ width: '100%' }} precision={2} min={0} max={100} />
-            </Form.Item>
-
-            <Form.Item
-              label={t('backtest.delaySeconds')}
-              name="delaySeconds"
-            >
-              <InputNumber style={{ width: '100%' }} precision={0} min={0} />
-              <span style={{ fontSize: 12, color: '#888' }}>{t('backtest.delaySecondsHint') || '延迟执行模拟真实跟单延迟'}</span>
-            </Form.Item>
-
-            <Form.Item
               label={t('backtest.supportSell')}
               name="supportSell"
               valuePropName="checked"
             >
               <Switch />
-              <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{t('backtest.supportSellHint') || '是否跟随 Leader 的卖出操作'}</span>
-            </Form.Item>
-
-            <h4 style={{ marginTop: 24, marginBottom: 16 }}>{t('backtest.advancedFilters')}</h4>
-
-            <Row gutter={24}>
-              <Col span={12}>
-                <Form.Item
-                  label={t('backtest.minOrderDepth') + ' (USDC)'}
-                  name="minOrderDepth"
-                >
-                  <InputNumber style={{ width: '100%' }} precision={2} min={0} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  label={t('backtest.maxSpread') + ' (%)'}
-                  name="maxSpread"
-                >
-                  <InputNumber style={{ width: '100%' }} precision={2} min={0} />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Row gutter={24}>
-              <Col span={12}>
-                <Form.Item
-                  label={t('backtest.minPrice')}
-                  name="minPrice"
-                >
-                  <InputNumber style={{ width: '100%' }} precision={4} min={0} max={1} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  label={t('backtest.maxPrice')}
-                  name="maxPrice"
-                >
-                  <InputNumber style={{ width: '100%' }} precision={4} min={0} max={1} />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Form.Item
-              label={t('backtest.maxPositionValue') + ' (USDC)'}
-              name="maxPositionValue"
-            >
-              <InputNumber style={{ width: '100%' }} precision={2} min={0} />
+              <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{t('backtest.supportSellHint') || '是否跟随 Leader 卖出'}</span>
             </Form.Item>
 
             <Form.Item
@@ -752,9 +712,8 @@ const BacktestList: React.FC = () => {
           </div>
         </Form>
       </Modal>
-    </div>
+    </div >
   )
 }
 
 export default BacktestList
-

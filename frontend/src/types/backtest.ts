@@ -29,6 +29,7 @@ export interface BacktestCreateRequest {
   keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'
   keywords?: string[]
   maxMarketEndDate?: number | null
+  pageForResume?: number  // 用于恢复中断任务，从指定页码开始获取历史数据（从1开始）
 }
 
 /**
@@ -41,6 +42,7 @@ export interface BacktestListRequest {
   sortOrder?: 'asc' | 'desc'
   page: number
   size: number
+  pageForResume?: number  // 恢复时从指定页码开始
 }
 
 /**
@@ -81,6 +83,13 @@ export interface BacktestDeleteRequest {
 }
 
 /**
+ * 回测任务重试请求
+ */
+export interface BacktestRetryRequest {
+  id: number
+}
+
+/**
  * 回测任务列表响应
  */
 export interface BacktestListResponse {
@@ -88,6 +97,7 @@ export interface BacktestListResponse {
   total: number
   page: number
   size: number
+  processedTradeCount?: number  // 已处理的交易数量（用于显示真实进度）
 }
 
 /**
@@ -97,6 +107,9 @@ export interface BacktestDetailResponse {
   task: BacktestTaskDto
   config: BacktestConfigDto
   statistics: BacktestStatisticsDto
+  lastProcessedTradeTime?: number  // 最后处理的交易时间（用于中断恢复）
+  lastProcessedTradeIndex?: number  // 最后处理的交易索引（用于中断恢复）
+  processedTradeCount?: number  // 已处理的交易数量（用于显示真实进度）
 }
 
 /**

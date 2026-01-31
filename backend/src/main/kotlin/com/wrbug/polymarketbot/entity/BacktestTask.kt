@@ -25,13 +25,13 @@ data class BacktestTask(
     val initialBalance: BigDecimal,
 
     @Column(name = "final_balance", precision = 20, scale = 8)
-    val finalBalance: BigDecimal? = null,
+    var finalBalance: BigDecimal? = null,
 
     @Column(name = "profit_amount", precision = 20, scale = 8)
-    val profitAmount: BigDecimal? = null,
+    var profitAmount: BigDecimal? = null,
 
     @Column(name = "profit_rate", precision = 10, scale = 4)
-    val profitRate: BigDecimal? = null,  // 收益率(%)
+    var profitRate: BigDecimal? = null,  // 收益率(%)
 
     @Column(name = "backtest_days", nullable = false)
     val backtestDays: Int,
@@ -40,7 +40,7 @@ data class BacktestTask(
     val startTime: Long,  // 回测开始时间(历史时间)
 
     @Column(name = "end_time")
-    val endTime: Long? = null,  // 回测结束时间(历史时间)
+    var endTime: Long? = null,  // 回测结束时间(历史时间)
 
     // 跟单配置 (复制CopyTrading表结构，但不包含 max_position_count)
     @Column(name = "copy_mode", nullable = false, length = 10)
@@ -64,29 +64,8 @@ data class BacktestTask(
     @Column(name = "max_daily_orders", nullable = false)
     val maxDailyOrders: Int = 100,
 
-    @Column(name = "price_tolerance", nullable = false, precision = 5, scale = 2)
-    val priceTolerance: BigDecimal = "5".toSafeBigDecimal(),  // 百分比
-
-    @Column(name = "delay_seconds", nullable = false)
-    val delaySeconds: Int = 0,
-
     @Column(name = "support_sell", nullable = false)
     val supportSell: Boolean = true,
-
-    @Column(name = "min_order_depth", precision = 20, scale = 8)
-    val minOrderDepth: BigDecimal? = null,
-
-    @Column(name = "max_spread", precision = 20, scale = 8)
-    val maxSpread: BigDecimal? = null,
-
-    @Column(name = "min_price", precision = 20, scale = 8)
-    val minPrice: BigDecimal? = null,
-
-    @Column(name = "max_price", precision = 20, scale = 8)
-    val maxPrice: BigDecimal? = null,
-
-    @Column(name = "max_position_value", precision = 20, scale = 8)
-    val maxPositionValue: BigDecimal? = null,
 
     @Column(name = "keyword_filter_mode", nullable = false, length = 20)
     val keywordFilterMode: String = "DISABLED",  // DISABLED/WHITELIST/BLACKLIST
@@ -94,15 +73,12 @@ data class BacktestTask(
     @Column(name = "keywords", columnDefinition = "JSON")
     val keywords: String? = null,
 
-    @Column(name = "max_market_end_date")
-    val maxMarketEndDate: Long? = null,
-
     // 统计字段
     @Column(name = "avg_holding_time")
-    val avgHoldingTime: Long? = null,  // 平均持仓时间(毫秒)
+    var avgHoldingTime: Long? = null,  // 平均持仓时间(毫秒)
 
     @Column(name = "data_source", length = 50)
-    val dataSource: String = "MIXED",  // INTERNAL/API/MIXED
+    var dataSource: String = "MIXED",  // INTERNAL/API/MIXED
 
     // 执行状态
     @Column(name = "status", nullable = false, length = 20)
@@ -152,6 +128,15 @@ data class BacktestTask(
     var executionFinishedAt: Long? = null,
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: Long = System.currentTimeMillis()
+    var updatedAt: Long = System.currentTimeMillis(),
+
+    @Column(name = "last_processed_trade_time")
+    var lastProcessedTradeTime: Long? = null,
+
+    @Column(name = "last_processed_trade_index")
+    var lastProcessedTradeIndex: Int = 0,
+
+    @Column(name = "processed_trade_count")
+    var processedTradeCount: Int = 0
 )
 
