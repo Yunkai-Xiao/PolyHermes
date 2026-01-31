@@ -1279,6 +1279,8 @@
     "retryConfirm": "Are you sure you want to retry this backtest task? It will continue from the breakpoint and preserve processed trades.",
     "deleteConfirm": "Are you sure you want to delete this backtest task?",
     "stopConfirm": "Are you sure you want to stop this backtest task?",
+    "createCopyTrading": "Create Copy Trading",
+    "createCopyTradingSuccess": "Copy trading config created successfully",
     "noTasks": "No backtest tasks",
     "noTrades": "No trade records",
     "fetchTasksFailed": "Failed to fetch task list",

@@ -16,12 +16,27 @@ interface AddModalProps {
   open: boolean
   onClose: () => void
   onSuccess?: () => void
+  preFilledConfig?: {
+    leaderId?: number
+    copyMode?: 'RATIO' | 'FIXED'
+    copyRatio?: number
+    fixedAmount?: string
+    maxOrderSize?: number
+    minOrderSize?: number
+    maxDailyLoss?: number
+    maxDailyOrders?: number
+    supportSell?: boolean
+    keywordFilterMode?: string
+    keywords?: string[]
+    configName?: string
+  }
 }
 
 const AddModal: React.FC<AddModalProps> = ({
   open,
   onClose,
-  onSuccess
+  onSuccess,
+  preFilledConfig
 }) => {
   const { t } = useTranslation()
   const isMobile = useMediaQuery({ maxWidth: 768 })
@@ -63,26 +78,113 @@ const AddModal: React.FC<AddModalProps> = ({
     })
     return `跟单配置-${dateStr}-${timeStr}`
   }
+
+  // 获取 Leader 资产信息
+  const fetchLeaderAssetInfo = async (leaderId: number) => {
+    if (!leaderId) return
+    
+    setLoadingAssetInfo(true)
+    setLeaderAssetInfo(null)
+    try {
+      const response = await apiService.leaders.balance({ leaderId })
+      if (response.data.code === 0 && response.data.data) {
+        const balance = response.data.data
+        setLeaderAssetInfo({
+          total: balance.totalBalance || '0',
+          available: balance.availableBalance || '0',
+          position: balance.positionBalance || '0'
+        })
+      } else {
+        message.error(response.data.msg || t('copyTradingAdd.fetchAssetInfoFailed') || '获取资产信息失败')
+      }
+    } catch (error: any) {
+      console.error('获取 Leader 资产失败:', error)
+      message.error(error.message || t('copyTradingAdd.fetchAssetInfoFailed') || '获取资产信息失败')
+    } finally {
+      setLoadingAssetInfo(false)
+    }
+  }
+
+  // 填充预配置数据到表单（复用模板填充逻辑）
+  const fillPreFilledConfig = (config: typeof preFilledConfig) => {
+    console.log('[AddModal] fillPreFilledConfig called with config:', config)
+    if (!config) {
+      console.log('[AddModal] fillPreFilledConfig: config is null/undefined')
+      return
+    }
+
+    const formValues = {
+      configName: config.configName || generateDefaultConfigName(),
+      leaderId: config.leaderId,
+      copyMode: config.copyMode || 'RATIO',
+      copyRatio: config.copyRatio,
+      fixedAmount: config.fixedAmount,
+      maxOrderSize: config.maxOrderSize,
+      minOrderSize: config.minOrderSize,
+      maxDailyLoss: config.maxDailyLoss,
+      maxDailyOrders: config.maxDailyOrders,
+      supportSell: config.supportSell,
+      keywordFilterMode: config.keywordFilterMode || 'DISABLED'
+    }
+    console.log('[AddModal] fillPreFilledConfig: setting form values:', formValues)
+    
+    form.setFieldsValue(formValues)
+    setCopyMode(config.copyMode || 'RATIO')
+    setKeywords(config.keywords || [])
+    
+    console.log('[AddModal] fillPreFilledConfig: form values set, copyMode:', config.copyMode, 'keywords:', config.keywords)
+    
+    // 自动获取 Leader 资产信息
+    if (config.leaderId) {
+      console.log('[AddModal] fillPreFilledConfig: fetching leader asset info for leaderId:', config.leaderId)
+      fetchLeaderAssetInfo(config.leaderId)
+    }
+  }
   
+  // 处理 Modal 打开/关闭
   useEffect(() => {
+    console.log('[AddModal] useEffect triggered, open:', open, 'preFilledConfig:', preFilledConfig)
     if (open) {
+      console.log('[AddModal] Modal opened, fetching accounts, leaders, templates')
       fetchAccounts()
       fetchLeaders()
       fetchTemplates()
-      
-      // 生成默认配置名
-      const defaultConfigName = generateDefaultConfigName()
-      form.setFieldsValue({ configName: defaultConfigName })
-      
-      // 重置关键字列表
-      setKeywords([])
+
+      // 如果有预填充配置，填充表单（延迟执行确保数据已加载）
+      if (preFilledConfig) {
+        console.log('[AddModal] preFilledConfig exists, will fill form after 100ms')
+        // 使用 setTimeout 确保在下一个事件循环执行，此时 Modal 已完全打开
+        setTimeout(() => {
+          console.log('[AddModal] setTimeout callback executed, calling fillPreFilledConfig')
+          fillPreFilledConfig(preFilledConfig)
+        }, 100)
+      } else {
+        console.log('[AddModal] No preFilledConfig, using default values')
+        // 没有预填充配置时，生成默认配置名
+        const defaultConfigName = generateDefaultConfigName()
+        form.setFieldsValue({
+          configName: defaultConfigName,
+          copyMode: 'RATIO',
+          copyRatio: 100,
+          maxOrderSize: 1000,
+          minOrderSize: 1,
+          maxDailyLoss: 10000,
+          maxDailyOrders: 100,
+          supportSell: true,
+          keywordFilterMode: 'DISABLED'
+        })
+        setCopyMode('RATIO')
+        setKeywords([])
+      }
     } else {
+      console.log('[AddModal] Modal closed, resetting form')
       // 关闭时重置表单
       form.resetFields()
       setKeywords([])
       setCopyMode('RATIO')
+      setLeaderAssetInfo(null)
     }
-  }, [open])
+  }, [open, preFilledConfig])
   
   const fetchLeaders = async () => {
     try {
@@ -131,32 +233,6 @@ const AddModal: React.FC<AddModalProps> = ({
   
   const handleCopyModeChange = (mode: 'RATIO' | 'FIXED') => {
     setCopyMode(mode)
-  }
-  
-  // 获取 Leader 资产信息
-  const fetchLeaderAssetInfo = async (leaderId: number) => {
-    if (!leaderId) return
-    
-    setLoadingAssetInfo(true)
-    setLeaderAssetInfo(null)
-    try {
-      const response = await apiService.leaders.balance({ leaderId })
-      if (response.data.code === 0 && response.data.data) {
-        const balance = response.data.data
-        setLeaderAssetInfo({
-          total: balance.totalBalance || '0',
-          available: balance.availableBalance || '0',
-          position: balance.positionBalance || '0'
-        })
-      } else {
-        message.error(response.data.msg || t('copyTradingAdd.fetchAssetInfoFailed') || '获取资产信息失败')
-      }
-    } catch (error: any) {
-      console.error('获取 Leader 资产失败:', error)
-      message.error(error.message || t('copyTradingAdd.fetchAssetInfoFailed') || '获取资产信息失败')
-    } finally {
-      setLoadingAssetInfo(false)
-    }
   }
   
   // 处理导入账户成功

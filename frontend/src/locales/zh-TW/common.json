@@ -1279,6 +1279,8 @@
     "retryConfirm": "確定重新運行此回測任務嗎？將從斷點繼續執行，保留已處理的交易記錄。",
     "deleteConfirm": "確定刪除此回測任務嗎?",
     "stopConfirm": "確定停止此回測任務嗎?",
+    "createCopyTrading": "創建跟單",
+    "createCopyTradingSuccess": "跟單配置創建成功",
     "noTasks": "暫無回測任務",
     "noTrades": "暫無交易記錄",
     "fetchTasksFailed": "獲取任務列表失敗",

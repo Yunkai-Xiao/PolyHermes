@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
 import { backtestService, apiService } from '../services/api'
 import type { BacktestTaskDto, BacktestListRequest, BacktestCreateRequest } from '../types/backtest'
 import type { Leader } from '../types'
 import { useMediaQuery } from 'react-responsive'
+import AddCopyTradingModal from './CopyTradingOrders/AddModal'
 
 const { Option } = Select
 
@@ -31,6 +32,10 @@ const BacktestList: React.FC = () => {
   const [createLoading, setCreateLoading] = useState(false)
   const [leaders, setLeaders] = useState<Leader[]>([])
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
+
+  // 创建跟单配置 Modal
+  const [addCopyTradingModalVisible, setAddCopyTradingModalVisible] = useState(false)
+  const [preFilledConfig, setPreFilledConfig] = useState<any>(null)
 
   // 获取回测任务列表
   const fetchTasks = async () => {
@@ -217,6 +222,53 @@ const BacktestList: React.FC = () => {
     }
   }
 
+  // 一键创建跟单配置
+  const handleCreateCopyTrading = async (task: BacktestTaskDto) => {
+    console.log('[BacktestList] handleCreateCopyTrading called, task:', task)
+    
+    try {
+      // 先获取任务详情以获取配置信息
+      const response = await backtestService.detail({ id: task.id })
+      if (response.data.code === 0 && response.data.data) {
+        const taskDetail = response.data.data.task
+        const taskConfig = response.data.data.config
+        
+        console.log('[BacktestList] Fetched task detail, config:', taskConfig)
+        
+        if (!taskConfig) {
+          message.error(t('backtest.fetchTaskDetailFailed') || '获取任务配置失败')
+          return
+        }
+
+        // 预填充回测任务的配置参数（从 config 中获取）
+        const preFilled = {
+          leaderId: taskDetail.leaderId,
+          copyMode: taskConfig.copyMode,
+          copyRatio: taskConfig.copyMode === 'RATIO' ? parseFloat(taskConfig.copyRatio) * 100 : undefined,
+          fixedAmount: taskConfig.copyMode === 'FIXED' ? taskConfig.fixedAmount : undefined,
+          maxOrderSize: parseFloat(taskConfig.maxOrderSize),
+          minOrderSize: parseFloat(taskConfig.minOrderSize),
+          maxDailyLoss: parseFloat(taskConfig.maxDailyLoss),
+          maxDailyOrders: taskConfig.maxDailyOrders,
+          supportSell: taskConfig.supportSell,
+          keywordFilterMode: taskConfig.keywordFilterMode || 'DISABLED',
+          keywords: taskConfig.keywords || [],
+          configName: `回测任务-${taskDetail.taskName}`
+        }
+
+        console.log('[BacktestList] Generated preFilled config:', preFilled)
+        console.log('[BacktestList] Setting preFilledConfig and opening modal')
+        setPreFilledConfig(preFilled)
+        setAddCopyTradingModalVisible(true)
+      } else {
+        message.error(response.data.msg || t('backtest.fetchTaskDetailFailed') || '获取任务详情失败')
+      }
+    } catch (error) {
+      console.error('[BacktestList] Failed to fetch task detail:', error)
+      message.error(t('backtest.fetchTaskDetailFailed') || '获取任务详情失败')
+    }
+  }
+
   // 状态标签颜色
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -357,6 +409,16 @@ const BacktestList: React.FC = () => {
           >
             {t('common.viewDetail')}
           </Button>
+          {record.status === 'COMPLETED' && (
+            <Button
+              type="link"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={() => handleCreateCopyTrading(record)}
+            >
+              {t('backtest.createCopyTrading')}
+            </Button>
+          )}
           {record.status === 'RUNNING' && (
             <Button
               type="link"
@@ -712,6 +774,21 @@ const BacktestList: React.FC = () => {
           </div>
         </Form>
       </Modal>
+
+      {/* 创建跟单配置 Modal */}
+      <AddCopyTradingModal
+        open={addCopyTradingModalVisible}
+        onClose={() => {
+          setAddCopyTradingModalVisible(false)
+          setPreFilledConfig(null)
+        }}
+        onSuccess={() => {
+          message.success(t('backtest.createCopyTradingSuccess'))
+          setAddCopyTradingModalVisible(false)
+          setPreFilledConfig(null)
+        }}
+        preFilledConfig={preFilledConfig}
+      />
     </div >
   )
 }

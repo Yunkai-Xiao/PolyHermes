@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Descriptions, Button, Tag, Space, Table, message, Row, Col, Statistic, Spin } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, CopyOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { formatUSDC } from '../utils'
 import { backtestService } from '../services/api'
 import type { BacktestTaskDto, BacktestConfigDto, BacktestStatisticsDto, BacktestTradeDto } from '../types/backtest'
 import { useMediaQuery } from 'react-responsive'
 import BacktestChart from './BacktestChart'
+import AddCopyTradingModal from './CopyTradingOrders/AddModal'
 
 const BacktestDetail: React.FC = () => {
   const { t } = useTranslation()
@@ -16,7 +17,7 @@ const BacktestDetail: React.FC = () => {
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<BacktestTaskDto | null>(null)
-  const [, setConfig] = useState<BacktestConfigDto | null>(null)
+  const [config, setConfig] = useState<BacktestConfigDto | null>(null)
   const [statistics, setStatistics] = useState<BacktestStatisticsDto | null>(null)
   const [trades, setTrades] = useState<BacktestTradeDto[]>([])
   const [allTrades, setAllTrades] = useState<BacktestTradeDto[]>([])  // 用于图表显示的所有交易数据
@@ -25,6 +26,10 @@ const BacktestDetail: React.FC = () => {
   const [tradesPage, setTradesPage] = useState(1)
   const [tradesSize] = useState(20)
   const [polling, setPolling] = useState<NodeJS.Timeout | null>(null)
+
+  // 创建跟单配置 Modal
+  const [addCopyTradingModalVisible, setAddCopyTradingModalVisible] = useState(false)
+  const [preFilledConfig, setPreFilledConfig] = useState<any>(null)
 
   // 获取回测任务详情
   const fetchTaskDetail = async () => {
@@ -173,6 +178,36 @@ const BacktestDetail: React.FC = () => {
     fetchTrades(tradesPage)
   }
 
+  // 一键创建跟单配置
+  const handleCreateCopyTrading = () => {
+    console.log('[BacktestDetail] handleCreateCopyTrading called, task:', task, 'config:', config)
+    if (!task || !config) {
+      console.log('[BacktestDetail] No task or config available')
+      return
+    }
+
+    // 预填充回测任务的配置参数（从 config 中获取）
+    const preFilled = {
+      leaderId: task.leaderId,
+      copyMode: config.copyMode,
+      copyRatio: config.copyMode === 'RATIO' ? parseFloat(config.copyRatio) * 100 : undefined,
+      fixedAmount: config.copyMode === 'FIXED' ? config.fixedAmount : undefined,
+      maxOrderSize: parseFloat(config.maxOrderSize),
+      minOrderSize: parseFloat(config.minOrderSize),
+      maxDailyLoss: parseFloat(config.maxDailyLoss),
+      maxDailyOrders: config.maxDailyOrders,
+      supportSell: config.supportSell,
+      keywordFilterMode: config.keywordFilterMode || 'DISABLED',
+      keywords: config.keywords || [],
+      configName: `回测任务-${task.taskName}`
+    }
+
+    console.log('[BacktestDetail] Generated preFilled config:', preFilled)
+    console.log('[BacktestDetail] Setting preFilledConfig and opening modal')
+    setPreFilledConfig(preFilled)
+    setAddCopyTradingModalVisible(true)
+  }
+
   // 状态标签颜色
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -285,6 +320,11 @@ const BacktestDetail: React.FC = () => {
               </Button>
             </Space>
             <Space>
+              {task.status === 'COMPLETED' && (
+                <Button type="primary" icon={<CopyOutlined />} onClick={handleCreateCopyTrading} size={isMobile ? 'middle' : 'large'}>
+                  {t('backtest.createCopyTrading')}
+                </Button>
+              )}
               {(task.status === 'RUNNING' || task.status === 'PENDING') && (
                 <Button danger icon={<StopOutlined />} onClick={handleStop} size={isMobile ? 'middle' : 'large'}>
                   {t('backtest.stop')}
@@ -463,6 +503,21 @@ const BacktestDetail: React.FC = () => {
           </Card>
         </Space>
       </Card>
+
+      {/* 创建跟单配置 Modal */}
+      <AddCopyTradingModal
+        open={addCopyTradingModalVisible}
+        onClose={() => {
+          setAddCopyTradingModalVisible(false)
+          setPreFilledConfig(null)
+        }}
+        onSuccess={() => {
+          message.success(t('backtest.createCopyTradingSuccess'))
+          setAddCopyTradingModalVisible(false)
+          setPreFilledConfig(null)
+        }}
+        preFilledConfig={preFilledConfig}
+      />
     </div>
   )
 }
