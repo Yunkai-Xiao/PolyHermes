@@ -233,13 +233,6 @@ const BacktestDetail: React.FC = () => {
       render: (value: string) => formatUSDC(value)
     },
     {
-      title: t('backtest.fee') + ' (USDC)',
-      dataIndex: 'fee',
-      key: 'fee',
-      width: 120,
-      render: (value: string) => formatUSDC(value || '0')
-    },
-    {
       title: t('backtest.profitLoss') + ' (USDC)',
       dataIndex: 'profitLoss',
       key: 'profitLoss',
