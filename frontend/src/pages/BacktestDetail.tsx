@@ -237,18 +237,23 @@ const BacktestDetail: React.FC = () => {
       dataIndex: 'fee',
       key: 'fee',
       width: 120,
-      render: (value: string) => formatUSDC(value)
+      render: (value: string) => formatUSDC(value || '0')
     },
     {
       title: t('backtest.profitLoss') + ' (USDC)',
       dataIndex: 'profitLoss',
       key: 'profitLoss',
       width: 120,
-      render: (value: string | null) => value ? (
-        <span style={{ color: parseFloat(value) >= 0 ? '#52c41a' : '#ff4d4f' }}>
-          {formatUSDC(value)}
-        </span>
-      ) : '-'
+      render: (value: string | null) => {
+        if (!value) return '-'
+        const num = parseFloat(value)
+        const color = num > 0 ? '#52c41a' : num < 0 ? '#ff4d4f' : undefined
+        return (
+          <span style={{ color }}>
+            {formatUSDC(value)}
+          </span>
+        )
+      }
     },
     {
       title: t('backtest.balanceAfter') + ' (USDC)',
