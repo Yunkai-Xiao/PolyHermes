@@ -64,6 +64,9 @@ data class BacktestTask(
     @Column(name = "max_daily_orders", nullable = false)
     val maxDailyOrders: Int = 100,
 
+    @Column(name = "slippage_percent", nullable = false, precision = 5, scale = 2)
+    val slippagePercent: BigDecimal = BigDecimal.ZERO,  // 滑点百分比（0.50 表示 0.5%）
+
     @Column(name = "support_sell", nullable = false)
     val supportSell: Boolean = true,
 
@@ -139,4 +142,3 @@ data class BacktestTask(
     @Column(name = "processed_trade_count")
     var processedTradeCount: Int = 0
 )
-

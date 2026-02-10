@@ -745,6 +745,7 @@ export const backtestService = {
     minOrderSize?: string
     maxDailyLoss?: string
     maxDailyOrders?: number
+    slippagePercent?: string
     priceTolerance?: string
     delaySeconds?: number
     supportSell?: boolean
@@ -799,4 +800,3 @@ export const backtestService = {
    */
   retry: (data: { id: number }) => apiClient.post('/backtest/tasks/retry', data)
 }
-

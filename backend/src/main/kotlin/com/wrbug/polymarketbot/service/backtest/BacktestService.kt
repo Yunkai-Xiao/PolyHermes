@@ -58,7 +58,13 @@ class BacktestService(
                 return Result.failure(IllegalArgumentException("初始金额必须大于 0"))
             }
 
-            // 4. 创建回测任务
+            // 5. 验证滑点
+            val slippagePercent = request.slippagePercent?.toSafeBigDecimal() ?: BigDecimal.ZERO
+            if (slippagePercent < BigDecimal.ZERO || slippagePercent >= BigDecimal("100")) {
+                return Result.failure(IllegalArgumentException("滑点必须在 0-100% 之间（不含 100）"))
+            }
+
+            // 6. 创建回测任务
             val task = BacktestTask(
                 taskName = request.taskName.trim(),
                 leaderId = request.leaderId,
@@ -75,6 +81,7 @@ class BacktestService(
                 minOrderSize = request.minOrderSize?.toSafeBigDecimal() ?: BigDecimal.ZERO,
                 maxDailyLoss = request.maxDailyLoss?.toSafeBigDecimal() ?: "10000".toSafeBigDecimal(),
                 maxDailyOrders = request.maxDailyOrders ?: 100,
+                slippagePercent = slippagePercent,
                 supportSell = request.supportSell ?: true,
                 keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                 keywords = if (request.keywords != null && request.keywords.isNotEmpty()) {
@@ -86,7 +93,7 @@ class BacktestService(
 
             backtestTaskRepository.save(task)
 
-            // 5. 转换为 DTO 返回
+            // 7. 转换为 DTO 返回
             Result.success(task.toDto(leader))
         } catch (e: Exception) {
             logger.error("创建回测任务失败", e)
@@ -184,6 +191,7 @@ class BacktestService(
                 minOrderSize = task.minOrderSize.toPlainString(),
                 maxDailyLoss = task.maxDailyLoss.toPlainString(),
                 maxDailyOrders = task.maxDailyOrders,
+                slippagePercent = task.slippagePercent.toPlainString(),
                 supportSell = task.supportSell,
                 keywordFilterMode = task.keywordFilterMode,
                 keywords = if (task.keywords != null) {

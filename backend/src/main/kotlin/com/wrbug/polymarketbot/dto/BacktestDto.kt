@@ -18,6 +18,7 @@ data class BacktestCreateRequest(
     val minOrderSize: String? = null,
     val maxDailyLoss: String? = null,
     val maxDailyOrders: Int? = null,
+    val slippagePercent: String? = null,  // 滑点百分比（例如 0.5 表示 0.5%）
     val supportSell: Boolean? = null,
     val keywordFilterMode: String? = null,  // 关键字过滤模式：DISABLED（不启用）、WHITELIST（白名单）、BLACKLIST（黑名单）
     val keywords: List<String>? = null,  // 关键字列表
@@ -154,6 +155,7 @@ data class BacktestConfigDto(
     val minOrderSize: String,
     val maxDailyLoss: String,
     val maxDailyOrders: Int,
+    val slippagePercent: String,
     val supportSell: Boolean,
     val keywordFilterMode: String?,
     val keywords: List<String>?
@@ -194,4 +196,3 @@ data class BacktestTradeDto(
     val balanceAfter: String,
     val leaderTradeId: String?
 )
-

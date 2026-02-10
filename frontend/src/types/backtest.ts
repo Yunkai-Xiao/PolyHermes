@@ -18,6 +18,7 @@ export interface BacktestCreateRequest {
   minOrderSize?: string
   maxDailyLoss?: string
   maxDailyOrders?: number
+  slippagePercent?: string
   priceTolerance?: string  // 百分比
   delaySeconds?: number
   supportSell?: boolean
@@ -167,6 +168,7 @@ export interface BacktestConfigDto {
   minOrderSize: string
   maxDailyLoss: string
   maxDailyOrders: number
+  slippagePercent: string
   priceTolerance: string  // 百分比
   delaySeconds: number
   supportSell: boolean
@@ -215,4 +217,3 @@ export interface BacktestTradeDto {
   balanceAfter: string
   leaderTradeId: string | null
 }
-

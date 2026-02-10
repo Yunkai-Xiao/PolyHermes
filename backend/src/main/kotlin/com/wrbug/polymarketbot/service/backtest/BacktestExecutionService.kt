@@ -40,6 +40,9 @@ class BacktestExecutionService(
         val leaderBuyQuantity: BigDecimal?
     )
 
+    private val hundred = BigDecimal("100")
+    private val minBacktestPrice = BigDecimal("0.00000001")
+
     /**
      * 将回测任务转换为虚拟的 CopyTrading 配置用于执行
      * 注意：回测场景使用历史数据，不需要实时跟单的相关配置
@@ -264,9 +267,11 @@ class BacktestExecutionService(
                             }
 
                             // 5.7 处理买卖逻辑
+                            val leaderPrice = leaderTrade.price.toSafeBigDecimal()
                             if (leaderTrade.side == "BUY") {
+                                val executedPrice = applyBuySlippage(leaderPrice, task.slippagePercent)
                                 // 买入逻辑
-                                val quantity = finalFollowAmount.divide(leaderTrade.price, 8, java.math.RoundingMode.DOWN)
+                                val quantity = finalFollowAmount.divide(executedPrice, 8, java.math.RoundingMode.DOWN)
                                 val totalCost = finalFollowAmount
 
                                 // 更新余额和持仓
@@ -277,7 +282,7 @@ class BacktestExecutionService(
                                     outcome = leaderTrade.outcome ?: "",
                                     outcomeIndex = leaderTrade.outcomeIndex,
                                     quantity = quantity,
-                                    avgPrice = leaderTrade.price.toSafeBigDecimal(),
+                                    avgPrice = executedPrice,
                                     leaderBuyQuantity = leaderTrade.size.toSafeBigDecimal()
                                 )
 
@@ -291,7 +296,7 @@ class BacktestExecutionService(
                                     outcome = leaderTrade.outcome ?: leaderTrade.outcomeIndex.toString(),
                                     outcomeIndex = leaderTrade.outcomeIndex,
                                     quantity = quantity,
-                                    price = leaderTrade.price.toSafeBigDecimal(),
+                                    price = executedPrice,
                                     amount = finalFollowAmount,
                                     fee = BigDecimal.ZERO,
                                     profitLoss = null,
@@ -307,6 +312,7 @@ class BacktestExecutionService(
                                 if (!task.supportSell) {
                                     continue
                                 }
+                                val executedPrice = applySellSlippage(leaderPrice, task.slippagePercent)
 
                                 val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
                                 val position = positions[positionKey] ?: continue
@@ -331,7 +337,7 @@ class BacktestExecutionService(
                                 }
 
                                 // 计算卖出金额
-                                val sellAmount = actualSellQuantity.multiply(leaderTrade.price.toSafeBigDecimal())
+                                val sellAmount = actualSellQuantity.multiply(executedPrice)
 
                                 // 5.6.2 检查卖出金额限制
                                 val finalSellAmount = if (sellAmount > task.maxOrderSize) {
@@ -366,7 +372,7 @@ class BacktestExecutionService(
                                     outcome = leaderTrade.outcome ?: leaderTrade.outcomeIndex.toString(),
                                     outcomeIndex = leaderTrade.outcomeIndex,
                                     quantity = actualSellQuantity,
-                                    price = leaderTrade.price.toSafeBigDecimal(),
+                                    price = executedPrice,
                                     amount = finalSellAmount,
                                     fee = BigDecimal.ZERO,
                                     profitLoss = profitLoss,
@@ -688,6 +694,28 @@ class BacktestExecutionService(
             // 固定金额模式：使用配置的固定金额
             task.fixedAmount ?: leaderTrade.amount.toSafeBigDecimal()
         }
+    }
+
+    /**
+     * BUY 成交价滑点：价格上浮（更差成交）
+     */
+    private fun applyBuySlippage(price: BigDecimal, slippagePercent: BigDecimal): BigDecimal {
+        if (slippagePercent <= BigDecimal.ZERO) {
+            return price
+        }
+        val factor = BigDecimal.ONE.add(slippagePercent.divide(hundred, 8, java.math.RoundingMode.HALF_UP))
+        return price.multiply(factor).coerceAtLeast(minBacktestPrice)
+    }
+
+    /**
+     * SELL 成交价滑点：价格下浮（更差成交）
+     */
+    private fun applySellSlippage(price: BigDecimal, slippagePercent: BigDecimal): BigDecimal {
+        if (slippagePercent <= BigDecimal.ZERO) {
+            return price
+        }
+        val factor = BigDecimal.ONE.subtract(slippagePercent.divide(hundred, 8, java.math.RoundingMode.HALF_UP))
+        return price.multiply(factor).coerceAtLeast(minBacktestPrice)
     }
 
     /**

@@ -181,6 +181,7 @@ const BacktestList: React.FC = () => {
       minOrderSize: 0,
       maxDailyLoss: 500,
       maxDailyOrders: 50,
+      slippagePercent: 0,
       supportSell: true,
       keywordFilterMode: 'DISABLED',
       backtestDays: 7
@@ -206,6 +207,7 @@ const BacktestList: React.FC = () => {
         minOrderSize: values.minOrderSize,
         maxDailyLoss: values.maxDailyLoss,
         maxDailyOrders: values.maxDailyOrders,
+        slippagePercent: values.slippagePercent?.toString(),
         supportSell: values.supportSell,
         keywordFilterMode: values.keywordFilterMode,
         keywords: values.keywords
@@ -404,6 +406,18 @@ const BacktestList: React.FC = () => {
       key: 'price',
       width: 100,
       render: (value: string) => parseFloat(value).toFixed(4)
+    },
+    {
+      title: t('backtest.slippageApplied') || '滑点',
+      key: 'slippageApplied',
+      width: 120,
+      render: (_: unknown, record: BacktestTradeDto) => {
+        const slippage = parseFloat(detailConfig?.slippagePercent ?? '0')
+        if (!slippage || record.side === 'SETTLEMENT') {
+          return '-'
+        }
+        return record.side === 'BUY' ? `+${slippage}%` : `-${slippage}%`
+      }
     },
     {
       title: t('backtest.amount') + ' (USDC)',
@@ -698,6 +712,7 @@ const BacktestList: React.FC = () => {
           initialValues={{
             maxDailyLoss: 500,
             maxDailyOrders: 50,
+            slippagePercent: 0,
             supportSell: true,
             keywordFilterMode: 'DISABLED',
             backtestDays: 7
@@ -872,6 +887,29 @@ const BacktestList: React.FC = () => {
                   rules={[{ required: true }]}
                 >
                   <InputNumber style={{ width: '100%' }} precision={0} min={1} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={24}>
+              <Col xs={24} sm={24} md={12}>
+                <Form.Item
+                  label={t('backtest.slippagePercent') || '回测滑点'}
+                  name="slippagePercent"
+                  tooltip={t('backtest.slippagePercentHint') || '用于模拟成交偏差：买入价格上浮、卖出价格下浮'}
+                  rules={[
+                    { required: true, message: t('backtest.slippagePercentRequired') || '请输入滑点百分比' },
+                    { type: 'number', min: 0, max: 99.99, message: t('backtest.slippagePercentInvalid') || '滑点必须在 0-99.99 之间' }
+                  ]}
+                >
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    precision={2}
+                    min={0}
+                    max={99.99}
+                    step={0.1}
+                    addonAfter="%"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1124,6 +1162,9 @@ const BacktestList: React.FC = () => {
                   </Descriptions.Item>
                   <Descriptions.Item label={t('backtest.maxDailyOrders')}>
                     {detailConfig.maxDailyOrders}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('backtest.slippagePercent') || '回测滑点'}>
+                    {detailConfig.slippagePercent ?? '0'}%
                   </Descriptions.Item>
                   <Descriptions.Item label={t('backtest.supportSell')}>
                     {detailConfig.supportSell ? t('common.yes') : t('common.no')}

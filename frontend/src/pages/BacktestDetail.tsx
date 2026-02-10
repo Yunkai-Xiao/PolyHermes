@@ -279,6 +279,18 @@ const BacktestDetail: React.FC = () => {
       render: (value: string) => parseFloat(value).toFixed(4)
     },
     {
+      title: t('backtest.slippageApplied') || 'Slippage',
+      key: 'slippageApplied',
+      width: 120,
+      render: (_: unknown, record: BacktestTradeDto) => {
+        const slippage = parseFloat(config?.slippagePercent ?? '0')
+        if (!slippage || record.side === 'SETTLEMENT') {
+          return '-'
+        }
+        return record.side === 'BUY' ? `+${slippage}%` : `-${slippage}%`
+      }
+    },
+    {
       title: t('backtest.amount') + ' (USDC)',
       dataIndex: 'amount',
       key: 'amount',
@@ -523,4 +535,3 @@ const BacktestDetail: React.FC = () => {
 }
 
 export default BacktestDetail
-
