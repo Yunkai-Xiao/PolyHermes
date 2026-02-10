@@ -285,7 +285,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               }}
               title={hasUpdate ? '有新版本可用，点击前往系统更新' : '当前已是最新版本'}
             >
-              {getVersionInfo().gitTag || `v${getVersionText()}`}
+              {`${getVersionInfo().gitTag || `v${getVersionText()}`} local`}
             </Tag>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -407,7 +407,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               }}
               title={hasUpdate ? '有新版本可用，点击前往系统更新' : '当前已是最新版本'}
             >
-              {getVersionInfo().gitTag || `v${getVersionText()}`}
+              {`${getVersionInfo().gitTag || `v${getVersionText()}`} local`}
             </Tag>
           </div>
           <div style={{ 
@@ -474,4 +474,3 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 }
 
 export default Layout
-

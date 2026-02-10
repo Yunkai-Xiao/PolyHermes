@@ -285,20 +285,21 @@ open class CopyOrderTrackingService(
                     // 计算跟单金额（USDC）= 买入数量 × 价格
                     val copyOrderAmount = buyQuantity.multi(tradePrice)
 
-                    // 如果启用了关键字过滤或市场截止时间过滤，需要先获取市场信息
+                    // 获取市场信息（用于可交易状态检查 + 关键字过滤 + 市场截止时间检查）
                     var marketTitle: String? = null
                     var marketEndDate: Long? = null
-                    val needMarketInfo =
-                        copyTrading.keywordFilterMode != "DISABLED" || copyTrading.maxMarketEndDate != null
-
-                    if (needMarketInfo) {
-                        try {
-                            val market = marketService.getMarket(trade.market)
-                            marketTitle = market?.title
-                            marketEndDate = market?.endDate
-                        } catch (e: Exception) {
-                            logger.warn("获取市场信息失败（关键字过滤/市场截止时间检查需要）: ${e.message}", e)
-                        }
+                    var marketActive: Boolean? = null
+                    var marketClosed: Boolean? = null
+                    var marketArchived: Boolean? = null
+                    try {
+                        val market = marketService.getMarket(trade.market)
+                        marketTitle = market?.title
+                        marketEndDate = market?.endDate
+                        marketActive = market?.active
+                        marketClosed = market?.closed
+                        marketArchived = market?.archived
+                    } catch (e: Exception) {
+                        logger.warn("获取市场信息失败（可交易状态/过滤检查）: ${e.message}", e)
                     }
 
                     // 过滤条件检查（在计算订单参数之前）
@@ -315,6 +316,9 @@ open class CopyOrderTrackingService(
                         marketId = trade.market,
                         marketTitle = marketTitle,
                         marketEndDate = marketEndDate,
+                        marketActive = marketActive,
+                        marketClosed = marketClosed,
+                        marketArchived = marketArchived,
                         outcomeIndex = trade.outcomeIndex
                     )
                     val orderbook = filterResult.orderbook  // 获取订单簿（如果需要）
@@ -1425,6 +1429,7 @@ open class CopyOrderTrackingService(
     private fun extractFilterType(status: FilterStatus, reason: String): String {
         return when (status) {
             FilterStatus.PASSED -> "PASSED"
+            FilterStatus.FAILED_MARKET_STATUS -> "MARKET_STATUS"
             FilterStatus.FAILED_PRICE_RANGE -> "PRICE_RANGE"
             FilterStatus.FAILED_ORDERBOOK_ERROR -> "ORDERBOOK_ERROR"
             FilterStatus.FAILED_ORDERBOOK_EMPTY -> "ORDERBOOK_EMPTY"
@@ -1604,4 +1609,3 @@ open class CopyOrderTrackingService(
         return "YES"  // 默认返回第一个 outcome
     }
 }
-

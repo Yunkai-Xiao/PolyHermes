@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -37,6 +38,9 @@ class UnifiedOnChainWsService(
     
     @Value("\${copy.trading.onchain.ws.reconnect.delay:3000}")
     private var reconnectDelay: Long = 3000  // 重连延迟（毫秒），默认3秒
+
+    @Value("\${copy.trading.onchain.ws.ping.interval:20}")
+    private var pingIntervalSeconds: Long = 20  // WebSocket 心跳间隔（秒），默认20秒
     
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
@@ -140,7 +144,7 @@ class UnifiedOnChainWsService(
 
     @PostConstruct
     fun init() {
-        logger.info("统一链上 WebSocket 服务已初始化 (独立连接模式)")
+        logger.info("统一链上 WebSocket 服务已初始化 (独立连接模式), pingInterval=${pingIntervalSeconds}s")
     }
 
     @PreDestroy
@@ -438,9 +442,10 @@ class UnifiedOnChainWsService(
         private fun createHttpClient(): OkHttpClient {
             val proxy = getProxyConfig()
             val builder = createClient()
+                // 主动发送 ping，降低公共节点空闲断连概率，并更快感知断链
+                .pingInterval(pingIntervalSeconds, TimeUnit.SECONDS)
             if (proxy != null) builder.proxy(proxy)
             return builder.build()
         }
     }
 }
-

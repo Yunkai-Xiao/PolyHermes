@@ -1,16 +1,13 @@
 package com.wrbug.polymarketbot.service.backtest
 
-import com.wrbug.polymarketbot.api.PolymarketDataApi
-import com.wrbug.polymarketbot.api.UserActivityResponse
 import com.wrbug.polymarketbot.dto.TradeData
-import com.wrbug.polymarketbot.entity.Leader
 import com.wrbug.polymarketbot.repository.LeaderRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
 
 /**
  * 回测数据服务
@@ -19,7 +16,9 @@ import java.math.BigDecimal
 @Service
 class BacktestDataService(
     private val leaderRepository: LeaderRepository,
-    private val retrofitFactory: RetrofitFactory
+    private val retrofitFactory: RetrofitFactory,
+    @Value("\${backtest.data-api.activity-max-offset:3000}")
+    private val activityMaxOffset: Int
 ) {
     private val logger = LoggerFactory.getLogger(BacktestDataService::class.java)
 
@@ -53,6 +52,12 @@ class BacktestDataService(
         val maxRetries = 5
         val retryDelay = 1000L  // 1秒
 
+        // Data API 的活动查询在高 offset 下会返回 400，提前结束分页避免任务失败
+        if (offset > activityMaxOffset) {
+            logger.info("第 $page 页 offset=$offset 超过配置上限 $activityMaxOffset，视为无更多数据并结束分页")
+            return emptyList()
+        }
+
         // 2. 重试机制：最多重试5次
         var lastException: Exception? = null
         for (attempt in 1..maxRetries) {
@@ -69,7 +74,27 @@ class BacktestDataService(
                 )
 
                 if (!response.isSuccessful || response.body() == null) {
-                    throw Exception("从 Data API 获取用户活动失败: code=${response.code()}, message=${response.message()}")
+                    val code = response.code()
+                    val responseMessage = response.message().orEmpty()
+                    val errorBody = try {
+                        response.errorBody()?.string()?.take(500).orEmpty()
+                    } catch (e: Exception) {
+                        ""
+                    }
+
+                    // 页码大于 0 时返回 400，通常是分页越界/offset 超限，作为结束条件处理
+                    if (code == 400 && page > 0) {
+                        logger.warn(
+                            "第 $page 页请求返回 400，视为分页结束: offset=$offset, size=$size, message=$responseMessage, errorBody=$errorBody"
+                        )
+                        return emptyList()
+                    }
+
+                    val errorMessage = "从 Data API 获取用户活动失败: code=$code, message=$responseMessage, errorBody=$errorBody"
+                    if (code in 400..499 && code != 429) {
+                        throw NonRetryableDataApiException(errorMessage)
+                    }
+                    throw Exception(errorMessage)
                 }
 
                 val activities = response.body()!!
@@ -112,6 +137,10 @@ class BacktestDataService(
                 }
 
             } catch (e: Exception) {
+                if (e is NonRetryableDataApiException) {
+                    logger.error("获取第 $page 页数据出现不可重试错误: ${e.message}")
+                    throw e
+                }
                 lastException = e
                 logger.warn("第 $attempt/$maxRetries 次尝试获取第 $page 页数据失败: ${e.message}")
 
@@ -128,4 +157,6 @@ class BacktestDataService(
         logger.error(errorMsg, lastException)
         throw Exception(errorMsg, lastException)
     }
+
+    private class NonRetryableDataApiException(message: String) : Exception(message)
 }

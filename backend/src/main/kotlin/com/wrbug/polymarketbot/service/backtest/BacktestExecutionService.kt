@@ -221,11 +221,14 @@ class BacktestExecutionService(
                                 marketId = leaderTrade.marketId,
                                 marketTitle = leaderTrade.marketTitle,
                                 marketEndDate = null,
-                                outcomeIndex = leaderTrade.outcomeIndex
+                                outcomeIndex = leaderTrade.outcomeIndex,
+                                skipOrderbookValidation = true
                             )
 
                             if (!filterResult.isPassed) {
-                                logger.debug("交易被过滤: ${leaderTrade.tradeId}")
+                                logger.debug(
+                                    "交易被过滤: tradeId=${leaderTrade.tradeId}, status=${filterResult.status}, reason=${filterResult.reason}"
+                                )
                                 continue
                             }
 

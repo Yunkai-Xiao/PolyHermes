@@ -178,7 +178,7 @@ const BacktestList: React.FC = () => {
       copyMode: 'RATIO',
       copyRatio: 100, // 默认 100%（显示为百分比）
       maxOrderSize: 1000,
-      minOrderSize: 1,
+      minOrderSize: 0,
       maxDailyLoss: 500,
       maxDailyOrders: 50,
       supportSell: true,
@@ -850,7 +850,7 @@ const BacktestList: React.FC = () => {
                   name="minOrderSize"
                   rules={[{ required: true }]}
                 >
-                  <InputNumber style={{ width: '100%' }} precision={2} min={1} />
+                  <InputNumber style={{ width: '100%' }} precision={2} min={0} />
                 </Form.Item>
               </Col>
             </Row>

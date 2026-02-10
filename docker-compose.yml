@@ -28,6 +28,8 @@ services:
       # 生成随机密钥：openssl rand -hex 32 (ADMIN_RESET_PASSWORD_KEY) 或 openssl rand -hex 64 (JWT_SECRET)
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - ADMIN_RESET_PASSWORD_KEY=${ADMIN_RESET_PASSWORD_KEY:-change-me-in-production}
+      - INITIAL_ADMIN_USERNAME=${INITIAL_ADMIN_USERNAME:-admin}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
       # 日志级别配置（可选，默认值：root=WARN, app=INFO）
       # 可选值：TRACE, DEBUG, INFO, WARN, ERROR, OFF
       - LOG_LEVEL_ROOT=${LOG_LEVEL_ROOT:-WARN}
@@ -56,7 +58,8 @@ services:
       - MYSQL_CHARACTER_SET_SERVER=utf8mb4
       - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
     volumes:
-      - mysql-data:/var/lib/mysql
+      # Use host bind mount to avoid accidental data loss from `docker compose down -v`
+      - ${MYSQL_DATA_DIR:-./data/mysql}:/var/lib/mysql
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-rootpassword}"]
@@ -67,10 +70,6 @@ services:
     networks:
       - polyhermes-network
 
-volumes:
-  mysql-data:
-
 networks:
   polyhermes-network:
     driver: bridge
-

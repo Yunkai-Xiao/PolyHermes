@@ -72,7 +72,7 @@ class BacktestService(
                 copyRatio = request.copyRatio?.toSafeBigDecimal() ?: BigDecimal.ONE,
                 fixedAmount = request.fixedAmount?.toSafeBigDecimal(),
                 maxOrderSize = request.maxOrderSize?.toSafeBigDecimal() ?: "1000".toSafeBigDecimal(),
-                minOrderSize = request.minOrderSize?.toSafeBigDecimal() ?: "1".toSafeBigDecimal(),
+                minOrderSize = request.minOrderSize?.toSafeBigDecimal() ?: BigDecimal.ZERO,
                 maxDailyLoss = request.maxDailyLoss?.toSafeBigDecimal() ?: "10000".toSafeBigDecimal(),
                 maxDailyOrders = request.maxDailyOrders ?: 100,
                 supportSell = request.supportSell ?: true,
@@ -370,4 +370,3 @@ private fun BacktestTask.toDto(leader: Leader?): BacktestTaskDto {
         executionFinishedAt = this.executionFinishedAt
     )
 }
-

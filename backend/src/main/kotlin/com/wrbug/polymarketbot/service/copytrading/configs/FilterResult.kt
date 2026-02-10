@@ -8,6 +8,8 @@ import com.wrbug.polymarketbot.api.OrderbookResponse
 enum class FilterStatus {
     /** 通过 */
     PASSED,
+    /** 失败：市场状态不可交易 */
+    FAILED_MARKET_STATUS,
     /** 失败：价格区间 */
     FAILED_PRICE_RANGE,
     /** 失败：订单簿获取失败 */
@@ -51,6 +53,12 @@ data class FilterResult(
         /** 价格区间失败 */
         fun priceRangeFailed(reason: String) = FilterResult(
             status = FilterStatus.FAILED_PRICE_RANGE,
+            reason = reason
+        )
+
+        /** 市场状态不可交易 */
+        fun marketStatusFailed(reason: String) = FilterResult(
+            status = FilterStatus.FAILED_MARKET_STATUS,
             reason = reason
         )
 
@@ -99,4 +107,3 @@ data class FilterResult(
         )
     }
 }
-

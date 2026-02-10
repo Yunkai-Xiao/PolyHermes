@@ -47,7 +47,11 @@ class CopyTradingFilterService(
         marketId: String? = null,  // 市场ID，用于仓位检查（按市场过滤仓位）
         marketTitle: String? = null,  // 市场标题，用于关键字过滤
         marketEndDate: Long? = null,  // 市场截止时间，用于市场截止时间检查
-        outcomeIndex: Int? = null  // 方向索引（0, 1, 2, ...），用于按市场+方向检查仓位
+        marketActive: Boolean? = null,  // 市场是否活跃（用于可交易状态检查）
+        marketClosed: Boolean? = null,  // 市场是否已关闭（用于可交易状态检查）
+        marketArchived: Boolean? = null,  // 市场是否已归档（用于可交易状态检查）
+        outcomeIndex: Int? = null,  // 方向索引（0, 1, 2, ...），用于按市场+方向检查仓位
+        skipOrderbookValidation: Boolean = false  // 是否跳过订单簿可交易性校验（回测场景使用）
     ): FilterResult {
         // 1. 关键字过滤检查（如果配置了关键字过滤）
         if (copyTrading.keywordFilterMode != null && copyTrading.keywordFilterMode != "DISABLED") {
@@ -57,6 +61,18 @@ class CopyTradingFilterService(
             }
         }
         
+        // 1.2. 市场可交易状态检查（基础过滤，始终生效）
+        val tradableCheck = checkMarketTradable(
+            marketId = marketId,
+            marketActive = marketActive,
+            marketClosed = marketClosed,
+            marketArchived = marketArchived,
+            marketEndDate = marketEndDate
+        )
+        if (!tradableCheck.isPassed) {
+            return tradableCheck
+        }
+
         // 1.5. 市场截止时间检查（如果配置了市场截止时间限制）
         if (copyTrading.maxMarketEndDate != null) {
             val marketEndDateCheck = checkMarketEndDate(copyTrading, marketEndDate)
@@ -73,46 +89,54 @@ class CopyTradingFilterService(
             }
         }
         
-        // 3. 检查是否需要获取订单簿或需要执行仓位检查
-        // 只有在配置了需要订单簿的过滤条件时才获取订单簿
+        // 3. 检查是否需要执行订单簿衍生过滤（价差/深度）
         val needOrderbook = copyTrading.maxSpread != null || copyTrading.minOrderDepth != null
-        
-        // 3.5. 如果不需要订单簿，则跳过订单簿相关的检查，但仍然需要检查仓位限制
-        if (!needOrderbook) {
-            // 仓位检查（如果配置了最大仓位限制且提供了跟单金额和市场ID）
-            if (copyOrderAmount != null && marketId != null) {
-                val positionCheck = checkPositionLimits(copyTrading, copyOrderAmount, marketId, outcomeIndex)
-                if (!positionCheck.isPassed) {
-                    return positionCheck
+
+        val shouldValidateOrderbook = !skipOrderbookValidation || needOrderbook
+        var orderbook: OrderbookResponse? = null
+
+        // 4. 基础可交易性检查：默认校验 token 对应订单簿是否存在（回测可显式跳过）
+        if (shouldValidateOrderbook) {
+            if (tokenId.isBlank()) {
+                return FilterResult.orderbookError("tokenId 为空，无法获取订单簿")
+            }
+
+            val orderbookResult = clobService.getOrderbookByTokenId(tokenId)
+            if (!orderbookResult.isSuccess) {
+                val error = orderbookResult.exceptionOrNull()
+                val errorMsg = error?.message ?: "未知错误"
+                val normalized = errorMsg.lowercase()
+                return if (normalized.contains("404") || normalized.contains("no orderbook exists")) {
+                    FilterResult.marketStatusFailed("市场不可交易：订单簿不存在或已下线")
+                } else {
+                    FilterResult.orderbookError("获取订单簿失败: $errorMsg")
                 }
             }
-            // 通过所有检查
-            return FilterResult.passed()
+
+            orderbook = orderbookResult.getOrNull()
+                ?: return FilterResult.orderbookEmpty()
+
+            // 市场存在但买卖盘都为空，也视为当前不可交易
+            if (orderbook.bids.isEmpty() && orderbook.asks.isEmpty()) {
+                return FilterResult.marketStatusFailed("市场不可交易：订单簿无买卖盘")
+            }
         }
-        
-        // 4. 获取订单簿（仅在需要时，只请求一次）
-        val orderbookResult = clobService.getOrderbookByTokenId(tokenId)
-        if (!orderbookResult.isSuccess) {
-            val error = orderbookResult.exceptionOrNull()
-            return FilterResult.orderbookError("获取订单簿失败: ${error?.message ?: "未知错误"}")
-        }
-        
-        val orderbook = orderbookResult.getOrNull()
-            ?: return FilterResult.orderbookEmpty()
         
         // 5. 买一卖一价差过滤（如果配置了）
-        if (copyTrading.maxSpread != null) {
-            val spreadCheck = checkSpread(copyTrading, orderbook)
+        if (needOrderbook && copyTrading.maxSpread != null) {
+            val currentOrderbook = orderbook ?: return FilterResult.orderbookEmpty()
+            val spreadCheck = checkSpread(copyTrading, currentOrderbook)
             if (!spreadCheck.isPassed) {
-                return FilterResult.spreadFailed(spreadCheck.reason, orderbook)
+                return FilterResult.spreadFailed(spreadCheck.reason, currentOrderbook)
             }
         }
         
         // 6. 订单深度过滤（如果配置了，检查所有方向）
-        if (copyTrading.minOrderDepth != null) {
-            val depthCheck = checkOrderDepth(copyTrading, orderbook)
+        if (needOrderbook && copyTrading.minOrderDepth != null) {
+            val currentOrderbook = orderbook ?: return FilterResult.orderbookEmpty()
+            val depthCheck = checkOrderDepth(copyTrading, currentOrderbook)
             if (!depthCheck.isPassed) {
-                return FilterResult.orderDepthFailed(depthCheck.reason, orderbook)
+                return FilterResult.orderDepthFailed(depthCheck.reason, currentOrderbook)
             }
         }
         
@@ -125,6 +149,31 @@ class CopyTradingFilterService(
         }
         
         return FilterResult.passed(orderbook)
+    }
+
+    /**
+     * 检查市场是否可交易（基础过滤）
+     */
+    private fun checkMarketTradable(
+        marketId: String?,
+        marketActive: Boolean?,
+        marketClosed: Boolean?,
+        marketArchived: Boolean?,
+        marketEndDate: Long?
+    ): FilterResult {
+        if (marketClosed == true) {
+            return FilterResult.marketStatusFailed("市场不可交易：market=${marketId ?: "unknown"} 已关闭")
+        }
+        if (marketArchived == true) {
+            return FilterResult.marketStatusFailed("市场不可交易：market=${marketId ?: "unknown"} 已归档")
+        }
+        if (marketActive == false) {
+            return FilterResult.marketStatusFailed("市场不可交易：market=${marketId ?: "unknown"} 非活跃")
+        }
+        if (marketEndDate != null && marketEndDate <= System.currentTimeMillis()) {
+            return FilterResult.marketStatusFailed("市场不可交易：market=${marketId ?: "unknown"} 已到期")
+        }
+        return FilterResult.passed()
     }
     
     /**
@@ -412,4 +461,3 @@ class CopyTradingFilterService(
         return FilterResult.passed()
     }
 }
-

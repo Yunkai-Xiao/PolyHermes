@@ -6,6 +6,7 @@ import com.wrbug.polymarketbot.entity.User
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.repository.UserRepository
 import com.wrbug.polymarketbot.util.JwtUtils
+import jakarta.annotation.PostConstruct
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -29,6 +30,48 @@ class AuthService(
     
     @Value("\${admin.reset-password.key}")
     private lateinit var resetPasswordKey: String
+
+    @Value("\${admin.initial.username:admin}")
+    private lateinit var initialAdminUsername: String
+
+    @Value("\${admin.initial.password:}")
+    private lateinit var initialAdminPassword: String
+
+    /**
+     * 数据库首次初始化时，根据环境变量自动创建初始管理员账户。
+     * 仅在用户表为空时生效，不会覆盖已有账户。
+     */
+    @PostConstruct
+    fun initializeAdminFromConfig() {
+        try {
+            if (userRepository.count() > 0L) {
+                return
+            }
+            if (initialAdminPassword.isBlank()) {
+                logger.warn("首次初始化跳过创建管理员：INITIAL_ADMIN_PASSWORD 未配置")
+                return
+            }
+            if (!checkPasswordStrength(initialAdminPassword)) {
+                logger.warn("首次初始化跳过创建管理员：INITIAL_ADMIN_PASSWORD 长度不足 6 位")
+                return
+            }
+
+            val username = initialAdminUsername.ifBlank { "admin" }
+            val now = System.currentTimeMillis()
+            val newUser = User(
+                username = username,
+                password = passwordEncoder.encode(initialAdminPassword),
+                isDefault = true,
+                tokenVersion = 0,
+                createdAt = now,
+                updatedAt = now
+            )
+            userRepository.save(newUser)
+            logger.warn("检测到首次初始化，已创建初始管理员账户：username={}", username)
+        } catch (e: Exception) {
+            logger.error("首次初始化管理员账户失败", e)
+        }
+    }
     
     /**
      * 登录（带IP限速保护）
@@ -222,4 +265,3 @@ class AuthService(
         return ip
     }
 }
-
