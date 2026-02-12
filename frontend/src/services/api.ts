@@ -738,6 +738,7 @@ export const backtestService = {
     leaderId: number
     initialBalance: string
     backtestDays: number
+    templateId?: number
     copyMode?: 'RATIO' | 'FIXED'
     copyRatio?: string
     fixedAmount?: string
@@ -798,5 +799,15 @@ export const backtestService = {
   /**
    * 重试回测任务
    */
-  retry: (data: { id: number }) => apiClient.post('/backtest/tasks/retry', data)
+  retry: (data: { id: number }) => apiClient.post('/backtest/tasks/retry', data),
+
+  /**
+   * 查询回测模板列表
+   */
+  listTemplates: () => apiClient.post('/backtest/templates/list', {}),
+
+  /**
+   * 查询回测模板详情
+   */
+  detailTemplate: (data: { templateId: number }) => apiClient.post('/backtest/templates/detail', data)
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Card, Form, Input, Button, Radio, InputNumber, Switch, message, Typography, Space, Divider } from 'antd'
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
@@ -10,9 +10,12 @@ const { Title } = Typography
 const TemplateAdd: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
+  const isBacktestTemplateFlow = location.pathname.startsWith('/backtest/templates')
+  const backPath = isBacktestTemplateFlow ? '/backtest' : '/templates'
   
   const handleSubmit = async (values: any) => {
     // 前端校验：如果填写了 minOrderSize，必须 >= 1
@@ -61,7 +64,7 @@ const TemplateAdd: React.FC = () => {
       
       if (response.data.code === 0) {
         message.success(t('templateAdd.createSuccess') || '创建模板成功')
-        navigate('/templates')
+        navigate(backPath)
       } else {
         message.error(response.data.msg || t('templateAdd.createFailed') || '创建模板失败')
       }
@@ -77,7 +80,7 @@ const TemplateAdd: React.FC = () => {
       <div style={{ marginBottom: 16 }}>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/templates')}
+          onClick={() => navigate(backPath)}
         >
           {t('templateAdd.back') || t('common.back') || '返回'}
         </Button>
@@ -399,7 +402,7 @@ const TemplateAdd: React.FC = () => {
                   >
                     {t('templateAdd.create') || '创建模板'}
                   </Button>
-                  <Button onClick={() => navigate('/templates')}>
+                  <Button onClick={() => navigate(backPath)}>
                     {t('common.cancel') || '取消'}
                   </Button>
                 </Space>
@@ -413,4 +416,3 @@ const TemplateAdd: React.FC = () => {
 }
 
 export default TemplateAdd
-

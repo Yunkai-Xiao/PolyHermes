@@ -221,5 +221,56 @@ class BacktestController(
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_RETRY_FAILED, e.message, messageSource))
         }
     }
-}
 
+    /**
+     * 查询回测模板列表
+     */
+    @PostMapping("/templates/list")
+    fun getBacktestTemplateList(): ResponseEntity<ApiResponse<BacktestTemplateListResponse>> {
+        return try {
+            val result = backtestService.getBacktestTemplateList()
+
+            result.fold(
+                onSuccess = { response ->
+                    logger.info("查询回测模板列表成功: total=${response.total}")
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("查询回测模板列表失败", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_LIST_FETCH_FAILED, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("查询回测模板列表异常", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_LIST_FETCH_FAILED, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 查询回测模板详情
+     */
+    @PostMapping("/templates/detail")
+    fun getBacktestTemplateDetail(@RequestBody request: BacktestTemplateDetailRequest): ResponseEntity<ApiResponse<BacktestTemplateDto>> {
+        return try {
+            val result = backtestService.getBacktestTemplateDetail(request)
+
+            result.fold(
+                onSuccess = { response ->
+                    logger.info("查询回测模板详情成功: templateId=${request.templateId}")
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("查询回测模板详情失败", e)
+                    val errorCode = when (e) {
+                        is IllegalArgumentException -> ErrorCode.TEMPLATE_NOT_FOUND
+                        else -> ErrorCode.SERVER_BACKTEST_DETAIL_FETCH_FAILED
+                    }
+                    ResponseEntity.ok(ApiResponse.error(errorCode, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("查询回测模板详情异常", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_DETAIL_FETCH_FAILED, e.message, messageSource))
+        }
+    }
+}

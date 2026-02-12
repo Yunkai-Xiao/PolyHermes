@@ -3,17 +3,16 @@ package com.wrbug.polymarketbot.service.backtest
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.entity.BacktestTask
 import com.wrbug.polymarketbot.entity.BacktestTrade
+import com.wrbug.polymarketbot.entity.CopyTradingTemplate
 import com.wrbug.polymarketbot.entity.Leader
-import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.repository.BacktestTaskRepository
 import com.wrbug.polymarketbot.repository.BacktestTradeRepository
+import com.wrbug.polymarketbot.repository.CopyTradingTemplateRepository
 import com.wrbug.polymarketbot.repository.LeaderRepository
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.toJson
 import com.wrbug.polymarketbot.util.fromJson
 import org.slf4j.LoggerFactory
-import org.springframework.context.MessageSource
-import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
@@ -28,9 +27,14 @@ class BacktestService(
     private val backtestTaskRepository: BacktestTaskRepository,
     private val backtestTradeRepository: BacktestTradeRepository,
     private val leaderRepository: LeaderRepository,
-    private val messageSource: MessageSource
+    private val copyTradingTemplateRepository: CopyTradingTemplateRepository
 ) {
     private val logger = LoggerFactory.getLogger(BacktestService::class.java)
+    private val defaultMaxOrderSize = "1000".toSafeBigDecimal()
+    private val defaultMinOrderSize = BigDecimal.ZERO
+    private val defaultMaxDailyLoss = "10000".toSafeBigDecimal()
+    private val defaultMaxDailyOrders = 100
+    private val defaultSlippagePercent = BigDecimal.ZERO
 
     /**
      * 创建回测任务
@@ -41,6 +45,10 @@ class BacktestService(
             // 1. 验证 Leader 是否存在
             val leader = leaderRepository.findById(request.leaderId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException("Leader 不存在"))
+
+            if (request.taskName.isBlank()) {
+                return Result.failure(IllegalArgumentException("回测任务名称不能为空"))
+            }
 
             // 2. 验证回测天数
             if (request.backtestDays < 1 || request.backtestDays > 15) {
@@ -64,7 +72,28 @@ class BacktestService(
                 return Result.failure(IllegalArgumentException("滑点必须在 0-100% 之间（不含 100）"))
             }
 
-            // 6. 创建回测任务
+            // 6. 解析模板（可选，复用跟单模板）
+            val template = if (request.templateId != null) {
+                copyTradingTemplateRepository.findById(request.templateId).orElse(null)
+                    ?: return Result.failure(IllegalArgumentException("回测模板不存在"))
+            } else {
+                null
+            }
+
+            val copyMode = request.copyMode ?: template?.copyMode ?: "RATIO"
+            if (copyMode != "RATIO" && copyMode != "FIXED") {
+                return Result.failure(IllegalArgumentException("copyMode 必须是 RATIO 或 FIXED"))
+            }
+
+            val copyRatio = request.copyRatio?.toSafeBigDecimal() ?: template?.copyRatio ?: BigDecimal.ONE
+            val fixedAmount = request.fixedAmount?.toSafeBigDecimal() ?: template?.fixedAmount
+            val maxOrderSize = request.maxOrderSize?.toSafeBigDecimal() ?: template?.maxOrderSize ?: defaultMaxOrderSize
+            val minOrderSize = request.minOrderSize?.toSafeBigDecimal() ?: template?.minOrderSize ?: defaultMinOrderSize
+            val maxDailyLoss = request.maxDailyLoss?.toSafeBigDecimal() ?: template?.maxDailyLoss ?: defaultMaxDailyLoss
+            val maxDailyOrders = request.maxDailyOrders ?: template?.maxDailyOrders ?: defaultMaxDailyOrders
+            val supportSell = request.supportSell ?: template?.supportSell ?: true
+
+            // 7. 创建回测任务
             val task = BacktestTask(
                 taskName = request.taskName.trim(),
                 leaderId = request.leaderId,
@@ -74,15 +103,15 @@ class BacktestService(
                 status = "PENDING",
 
                 // 跟单配置（不包含 max_position_count）
-                copyMode = request.copyMode ?: "RATIO",
-                copyRatio = request.copyRatio?.toSafeBigDecimal() ?: BigDecimal.ONE,
-                fixedAmount = request.fixedAmount?.toSafeBigDecimal(),
-                maxOrderSize = request.maxOrderSize?.toSafeBigDecimal() ?: "1000".toSafeBigDecimal(),
-                minOrderSize = request.minOrderSize?.toSafeBigDecimal() ?: BigDecimal.ZERO,
-                maxDailyLoss = request.maxDailyLoss?.toSafeBigDecimal() ?: "10000".toSafeBigDecimal(),
-                maxDailyOrders = request.maxDailyOrders ?: 100,
+                copyMode = copyMode,
+                copyRatio = copyRatio,
+                fixedAmount = fixedAmount,
+                maxOrderSize = maxOrderSize,
+                minOrderSize = minOrderSize,
+                maxDailyLoss = maxDailyLoss,
+                maxDailyOrders = maxDailyOrders,
                 slippagePercent = slippagePercent,
-                supportSell = request.supportSell ?: true,
+                supportSell = supportSell,
                 keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                 keywords = if (request.keywords != null && request.keywords.isNotEmpty()) {
                     request.keywords.toJson()
@@ -93,7 +122,7 @@ class BacktestService(
 
             backtestTaskRepository.save(task)
 
-            // 7. 转换为 DTO 返回
+            // 8. 转换为 DTO 返回
             Result.success(task.toDto(leader))
         } catch (e: Exception) {
             logger.error("创建回测任务失败", e)
@@ -350,6 +379,55 @@ class BacktestService(
             logger.error("重试回测任务失败", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * 查询回测模板列表（复用跟单模板）
+     */
+    fun getBacktestTemplateList(): Result<BacktestTemplateListResponse> {
+        return try {
+            val templates = copyTradingTemplateRepository.findAllByOrderByCreatedAtDesc()
+            val list = templates.map { toBacktestTemplateDto(it) }
+            Result.success(
+                BacktestTemplateListResponse(
+                    list = list,
+                    total = list.size.toLong()
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("查询回测模板列表失败", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 查询回测模板详情（复用跟单模板）
+     */
+    fun getBacktestTemplateDetail(request: BacktestTemplateDetailRequest): Result<BacktestTemplateDto> {
+        return try {
+            val template = copyTradingTemplateRepository.findById(request.templateId).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("回测模板不存在"))
+            Result.success(toBacktestTemplateDto(template))
+        } catch (e: Exception) {
+            logger.error("查询回测模板详情失败", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun toBacktestTemplateDto(template: CopyTradingTemplate): BacktestTemplateDto {
+        return BacktestTemplateDto(
+            id = template.id!!,
+            templateName = template.templateName,
+            copyMode = template.copyMode,
+            copyRatio = template.copyRatio.toPlainString(),
+            fixedAmount = template.fixedAmount?.toPlainString(),
+            maxOrderSize = template.maxOrderSize.toPlainString(),
+            minOrderSize = template.minOrderSize.toPlainString(),
+            maxDailyLoss = template.maxDailyLoss.toPlainString(),
+            maxDailyOrders = template.maxDailyOrders,
+            supportSell = template.supportSell,
+            slippagePercent = defaultSlippagePercent.toPlainString()
+        )
     }
 }
 

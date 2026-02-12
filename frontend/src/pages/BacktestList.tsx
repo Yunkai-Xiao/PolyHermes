@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch, Statistic, Descriptions } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
 import { backtestService, apiService } from '../services/api'
-import type { BacktestTaskDto, BacktestListRequest, BacktestCreateRequest, BacktestTradeDto } from '../types/backtest'
+import type {
+  BacktestTaskDto,
+  BacktestListRequest,
+  BacktestCreateRequest,
+  BacktestTradeDto,
+  BacktestTemplateDto
+} from '../types/backtest'
 import type { Leader } from '../types'
 import { useMediaQuery } from 'react-responsive'
+import { useNavigate } from 'react-router-dom'
 import AddCopyTradingModal from './CopyTradingOrders/AddModal'
 import BacktestChart from './BacktestChart'
 
@@ -14,6 +21,7 @@ const { Option } = Select
 
 const BacktestList: React.FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [loading, setLoading] = useState(false)
   const [tasks, setTasks] = useState<BacktestTaskDto[]>([])
@@ -30,6 +38,8 @@ const BacktestList: React.FC = () => {
   const [createForm] = Form.useForm()
   const [createLoading, setCreateLoading] = useState(false)
   const [leaders, setLeaders] = useState<Leader[]>([])
+  const [templates, setTemplates] = useState<BacktestTemplateDto[]>([])
+  const [templateLoading, setTemplateLoading] = useState(false)
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
 
   // 创建跟单配置 Modal
@@ -153,28 +163,44 @@ const BacktestList: React.FC = () => {
     })
   }
 
-  // 获取 Leader 列表
+  const fetchCreateOptions = useCallback(async () => {
+    try {
+      setTemplateLoading(true)
+      const [leaderResp, templateResp] = await Promise.all([
+        apiService.leaders.list({}),
+        backtestService.listTemplates()
+      ])
+
+      if (leaderResp.data.code === 0 && leaderResp.data.data) {
+        setLeaders(leaderResp.data.data.list || [])
+      }
+
+      if (templateResp.data.code === 0 && templateResp.data.data) {
+        setTemplates(templateResp.data.data.list || [])
+      } else {
+        message.error(templateResp.data.msg || t('backtest.fetchTemplatesFailed') || '获取回测模板失败')
+      }
+    } catch (error) {
+      console.error('Failed to fetch create options:', error)
+      message.error(t('backtest.fetchTemplatesFailed') || '获取回测模板失败')
+    } finally {
+      setTemplateLoading(false)
+    }
+  }, [t])
+
+  // 获取创建回测所需选项
   useEffect(() => {
     if (createModalVisible) {
-      const fetchLeaders = async () => {
-        try {
-          const response = await apiService.leaders.list({})
-          if (response.data.code === 0 && response.data.data) {
-            setLeaders(response.data.data.list || [])
-          }
-        } catch (error) {
-          console.error('Failed to fetch leaders:', error)
-        }
-      }
-      fetchLeaders()
+      fetchCreateOptions()
     }
-  }, [createModalVisible])
+  }, [createModalVisible, fetchCreateOptions])
 
   // 打开创建 modal
   const handleCreate = () => {
     setCreateModalVisible(true)
     createForm.resetFields()
     createForm.setFieldsValue({
+      templateId: undefined,
       copyMode: 'RATIO',
       copyRatio: 100, // 默认 100%（显示为百分比）
       maxOrderSize: 1000,
@@ -189,6 +215,46 @@ const BacktestList: React.FC = () => {
     setCopyMode('RATIO')
   }
 
+  const applyTemplateToForm = (template: BacktestTemplateDto) => {
+    const patch: Record<string, any> = {
+      templateId: template.id,
+      copyMode: template.copyMode,
+      maxOrderSize: parseFloat(template.maxOrderSize),
+      minOrderSize: parseFloat(template.minOrderSize),
+      maxDailyLoss: parseFloat(template.maxDailyLoss),
+      maxDailyOrders: template.maxDailyOrders,
+      supportSell: template.supportSell,
+      slippagePercent: parseFloat(template.slippagePercent)
+    }
+
+    if (template.copyMode === 'RATIO') {
+      patch.copyRatio = parseFloat(template.copyRatio) * 100
+      patch.fixedAmount = undefined
+    } else {
+      patch.fixedAmount = template.fixedAmount ? parseFloat(template.fixedAmount) : undefined
+      patch.copyRatio = undefined
+    }
+
+    createForm.setFieldsValue(patch)
+    setCopyMode(template.copyMode)
+  }
+
+  const handleTemplateChange = (templateId?: number) => {
+    if (!templateId) {
+      return
+    }
+    const selected = templates.find(item => item.id === templateId)
+    if (!selected) {
+      return
+    }
+    applyTemplateToForm(selected)
+    message.success(t('backtest.templateApplied') || '模板已应用')
+  }
+
+  const handleCreateTemplate = () => {
+    navigate('/backtest/templates/add')
+  }
+
   // 提交创建回测任务
   const handleCreateSubmit = async () => {
     try {
@@ -200,6 +266,7 @@ const BacktestList: React.FC = () => {
         leaderId: values.leaderId,
         initialBalance: values.initialBalance,
         backtestDays: values.backtestDays,
+        templateId: values.templateId,
         copyMode: values.copyMode || 'RATIO',
         copyRatio: values.copyMode === 'RATIO' && values.copyRatio ? (values.copyRatio / 100).toString() : undefined,
         fixedAmount: values.copyMode === 'FIXED' ? values.fixedAmount : undefined,
@@ -710,6 +777,7 @@ const BacktestList: React.FC = () => {
           form={createForm}
           layout="vertical"
           initialValues={{
+            templateId: undefined,
             maxDailyLoss: 500,
             maxDailyOrders: 50,
             slippagePercent: 0,
@@ -730,6 +798,53 @@ const BacktestList: React.FC = () => {
             </Col>
             <Col xs={24} sm={24} md={12}>
               <Form.Item
+                label={t('backtest.template')}
+                name="templateId"
+                extra={
+                  <Space size="small">
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={handleCreateTemplate}
+                      style={{ paddingInline: 0 }}
+                    >
+                      {t('backtest.createTemplate') || '新建模板'}
+                    </Button>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      onClick={fetchCreateOptions}
+                      loading={templateLoading}
+                      style={{ paddingInline: 0 }}
+                    >
+                      {t('backtest.refreshTemplates') || '刷新模板'}
+                    </Button>
+                  </Space>
+                }
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  loading={templateLoading}
+                  placeholder={t('backtest.templatePlaceholder') || '选择模板（可选）'}
+                  onChange={handleTemplateChange}
+                  optionFilterProp="children"
+                >
+                  {templates.map((template) => (
+                    <Option key={template.id} value={template.id}>
+                      {template.templateName}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={24}>
+            <Col xs={24} sm={24} md={12}>
+              <Form.Item
                 label={t('backtest.leader')}
                 name="leaderId"
                 rules={[{ required: true, message: t('backtest.leaderRequired') || '请选择 Leader' }]}
@@ -743,9 +858,6 @@ const BacktestList: React.FC = () => {
                 </Select>
               </Form.Item>
             </Col>
-          </Row>
-
-          <Row gutter={24}>
             <Col xs={24} sm={24} md={12}>
               <Form.Item
                 label={t('backtest.initialBalance') + ' (USDC)'}
@@ -763,6 +875,9 @@ const BacktestList: React.FC = () => {
                 />
               </Form.Item>
             </Col>
+          </Row>
+
+          <Row gutter={24}>
             <Col xs={24} sm={24} md={12}>
               <Form.Item
                 label={t('backtest.backtestDays') + ` (1-15 ${t('common.day')})`}

@@ -10,6 +10,7 @@ data class BacktestCreateRequest(
     val leaderId: Long,  // Leader ID
     val initialBalance: String,  // 初始资金
     val backtestDays: Int,  // 回测天数 (1-30)
+    val templateId: Long? = null,  // 回测模板ID（复用跟单模板）
     // 跟单配置（与 CopyTrading 一致，但不包含 max_position_count）
     val copyMode: String? = null,  // "RATIO" 或 "FIXED"
     val copyRatio: String? = null,  // 仅在 copyMode="RATIO" 时生效
@@ -118,6 +119,38 @@ data class BacktestProgressResponse(
     val currentBalance: String,  // 当前余额
     val totalTrades: Int,  // 总交易笔数
     val status: String  // 任务状态
+)
+
+/**
+ * 回测模板详情请求
+ */
+data class BacktestTemplateDetailRequest(
+    val templateId: Long
+)
+
+/**
+ * 回测模板列表响应
+ */
+data class BacktestTemplateListResponse(
+    val list: List<BacktestTemplateDto>,
+    val total: Long
+)
+
+/**
+ * 回测模板信息
+ */
+data class BacktestTemplateDto(
+    val id: Long,
+    val templateName: String,
+    val copyMode: String,
+    val copyRatio: String,
+    val fixedAmount: String?,
+    val maxOrderSize: String,
+    val minOrderSize: String,
+    val maxDailyLoss: String,
+    val maxDailyOrders: Int,
+    val supportSell: Boolean,
+    val slippagePercent: String
 )
 
 /**

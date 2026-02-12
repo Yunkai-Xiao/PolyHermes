@@ -10,6 +10,7 @@ export interface BacktestCreateRequest {
   leaderId: number
   initialBalance: string
   backtestDays: number  // 1-30
+  templateId?: number
   // 跟单配置
   copyMode?: 'RATIO' | 'FIXED'
   copyRatio?: string
@@ -216,4 +217,29 @@ export interface BacktestTradeDto {
   profitLoss: string | null  // 仅卖出和结算时有值
   balanceAfter: string
   leaderTradeId: string | null
+}
+
+/**
+ * 回测模板信息
+ */
+export interface BacktestTemplateDto {
+  id: number
+  templateName: string
+  copyMode: 'RATIO' | 'FIXED'
+  copyRatio: string
+  fixedAmount: string | null
+  maxOrderSize: string
+  minOrderSize: string
+  maxDailyLoss: string
+  maxDailyOrders: number
+  supportSell: boolean
+  slippagePercent: string
+}
+
+/**
+ * 回测模板列表响应
+ */
+export interface BacktestTemplateListResponse {
+  list: BacktestTemplateDto[]
+  total: number
 }

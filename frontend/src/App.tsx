@@ -249,6 +249,7 @@ function App() {
           <Route path="/templates" element={<ProtectedRoute><TemplateList /></ProtectedRoute>} />
           <Route path="/templates/add" element={<ProtectedRoute><TemplateAdd /></ProtectedRoute>} />
           <Route path="/templates/edit/:id" element={<ProtectedRoute><TemplateEdit /></ProtectedRoute>} />
+          <Route path="/backtest/templates/add" element={<ProtectedRoute><TemplateAdd /></ProtectedRoute>} />
           <Route path="/copy-trading" element={<ProtectedRoute><CopyTradingList /></ProtectedRoute>} />
           <Route path="/copy-trading/statistics/:copyTradingId" element={<ProtectedRoute><CopyTradingStatistics /></ProtectedRoute>} />
           {/* 保留旧路由以保持向后兼容 */}
@@ -275,4 +276,3 @@ function App() {
 }
 
 export default App
-
