@@ -249,7 +249,11 @@ data class CancelOrdersBatchRequest(
 
 data class OrderbookResponse(
     val bids: List<OrderbookEntry>,
-    val asks: List<OrderbookEntry>
+    val asks: List<OrderbookEntry>,
+    @SerializedName("min_order_size")
+    val minOrderSize: String? = null,
+    @SerializedName("tick_size")
+    val tickSize: String? = null
 )
 
 data class OrderbookEntry(
@@ -390,4 +394,3 @@ data class LatestPriceResponse(
     val bestBid: String?,  // 最高买入价
     val bestAsk: String?   // 最低卖出价
 )
-

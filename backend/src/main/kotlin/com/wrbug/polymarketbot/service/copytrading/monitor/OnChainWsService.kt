@@ -12,6 +12,7 @@ import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -30,8 +31,14 @@ class OnChainWsService(
 
     private val logger = LoggerFactory.getLogger(OnChainWsService::class.java)
 
+    @Value("\${copytrading.subscription.stale-trade-grace-ms:300000}")
+    private var staleTradeGraceMs: Long = 300000L
+
     // 存储需要监听的Leader：leaderId -> Leader
     private val monitoredLeaders = ConcurrentHashMap<Long, Leader>()
+
+    // Leader 开始监听时间（leaderId -> 毫秒时间戳）
+    private val leaderMonitoringStartTimes = ConcurrentHashMap<Long, Long>()
 
     // 存储已处理的交易哈希，用于去重（LRU 缓存，保留最近 100 条）
     private val processedTxHashes: Cache<String, Long> = Caffeine.newBuilder()
@@ -52,6 +59,7 @@ class OnChainWsService(
 
         // 更新 Leader 列表
         monitoredLeaders.clear()
+        leaderMonitoringStartTimes.clear()
         leaders.forEach { leader ->
             addLeader(leader)
         }
@@ -76,6 +84,7 @@ class OnChainWsService(
         }
 
         monitoredLeaders[leaderId] = leader
+        leaderMonitoringStartTimes[leaderId] = System.currentTimeMillis()
 
         // 通过统一服务订阅
         val subscriptionId = "LEADER_$leaderId"
@@ -143,6 +152,13 @@ class OnChainWsService(
                 null
             }
 
+            if (isStaleTradeEvent(leaderId, blockTimestamp)) {
+                logger.debug(
+                    "过滤订阅前旧链上事件: leaderId=$leaderId, txHash=$txHash, blockTimestamp=$blockTimestamp, startAt=${leaderMonitoringStartTimes[leaderId]}, graceMs=$staleTradeGraceMs"
+                )
+                return
+            }
+
             // 解析 receipt 中的 Transfer 日志
             val logs = receiptJson.getAsJsonArray("logs") ?: run {
                 logger.warn("交易 receipt 中没有日志: leaderId=$leaderId, txHash=$txHash")
@@ -183,6 +199,7 @@ class OnChainWsService(
      */
     fun removeLeader(leaderId: Long) {
         monitoredLeaders.remove(leaderId)
+        leaderMonitoringStartTimes.remove(leaderId)
 
         // 通过统一服务取消订阅
         val subscriptionId = "LEADER_$leaderId"
@@ -206,5 +223,18 @@ class OnChainWsService(
     @PreDestroy
     fun destroy() {
         stop()
+    }
+
+    /**
+     * 是否属于订阅前旧事件
+     */
+    private fun isStaleTradeEvent(leaderId: Long, tradeTimestampMs: Long?): Boolean {
+        if (tradeTimestampMs == null) {
+            return false
+        }
+        val startAt = leaderMonitoringStartTimes[leaderId] ?: return false
+        val grace = staleTradeGraceMs.coerceAtLeast(0L)
+        val threshold = startAt - grace
+        return tradeTimestampMs < threshold
     }
 }

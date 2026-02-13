@@ -92,6 +92,48 @@ class MarketPriceService(
         logger.error(errorMsg)
         throw IllegalStateException(errorMsg)
     }
+
+    /**
+     * 获取用于估值的 mark price：
+     * - 已结算：0/1
+     * - 未结算：优先使用订单簿 midpoint（(bestBid+bestAsk)/2），否则降级到 bestBid/bestAsk，再降级到 Gamma
+     *
+     * 与 getCurrentMarketPrice 的区别：
+     * - getCurrentMarketPrice 偏“卖出可实现价”（bestBid 优先）
+     * - getMarkPrice 偏“估值中间价”
+     */
+    suspend fun getMarkPrice(marketId: String, outcomeIndex: Int): BigDecimal {
+        val (chainPrice, hasRpcError) = getPriceFromChainCondition(marketId, outcomeIndex)
+        if (chainPrice != null) {
+            return chainPrice.setScale(4, java.math.RoundingMode.DOWN)
+        }
+        if (hasRpcError) {
+            logger.debug("链上查询 market condition 出现 RPC 错误（execution reverted），降级到 API 查询: marketId=$marketId, outcomeIndex=$outcomeIndex")
+        }
+
+        val orderbookPrice = getMarkPriceFromClobOrderbook(marketId, outcomeIndex)
+        if (orderbookPrice != null) {
+            return orderbookPrice.setScale(4, java.math.RoundingMode.DOWN)
+        }
+
+        val marketPrice = getPriceFromGammaMarket(marketId, outcomeIndex)
+        if (marketPrice != null) {
+            return marketPrice.setScale(4, java.math.RoundingMode.DOWN)
+        }
+
+        val errorMsg = "无法获取估值价格: marketId=$marketId, outcomeIndex=$outcomeIndex (链上、订单簿、Market API 均失败)"
+        logger.error(errorMsg)
+        throw IllegalStateException(errorMsg)
+    }
+
+    /**
+     * 获取市场的已结算价格（仅 0/1）。
+     * 如果市场尚未在链上结算，返回 null。
+     */
+    suspend fun getResolvedMarketPrice(marketId: String, outcomeIndex: Int): BigDecimal? {
+        val (chainPrice, _) = getPriceFromChainCondition(marketId, outcomeIndex)
+        return chainPrice?.setScale(4, java.math.RoundingMode.DOWN)
+    }
     
     /**
      * 从链上查询市场结算结果获取价格
@@ -285,6 +327,61 @@ class MarketPriceService(
             null
         }
     }
+
+    /**
+     * 从 CLOB 订单簿获取估值价格：
+     * - 同时存在 bestBid 与 bestAsk：midpoint
+     * - 否则：bestBid 或 bestAsk
+     */
+    private suspend fun getMarkPriceFromClobOrderbook(marketId: String, outcomeIndex: Int): BigDecimal? {
+        return try {
+            val tokenIdResult = blockchainService.getTokenId(marketId, outcomeIndex)
+            if (!tokenIdResult.isSuccess) {
+                return null
+            }
+            val tokenId = tokenIdResult.getOrNull() ?: return null
+
+            val clobApi = try {
+                getAuthenticatedClobApi() ?: retrofitFactory.createClobApiWithoutAuth()
+            } catch (e: Exception) {
+                logger.debug("获取带鉴权的 CLOB API 失败，使用不带鉴权的 API: ${e.message}")
+                retrofitFactory.createClobApiWithoutAuth()
+            }
+
+            val orderbookResponse = clobApi.getOrderbook(tokenId = tokenId, market = null)
+            if (!orderbookResponse.isSuccessful || orderbookResponse.body() == null) {
+                return null
+            }
+            val orderbook = orderbookResponse.body()!!
+
+            val bestBid = orderbook.bids
+                .mapNotNull { it.price.toSafeBigDecimal() }
+                .maxOrNull()
+
+            val bestAsk = orderbook.asks
+                .mapNotNull { it.price.toSafeBigDecimal() }
+                .minOrNull()
+
+            if (bestBid != null && bestAsk != null && bestBid > BigDecimal.ZERO && bestAsk > BigDecimal.ZERO) {
+                val midpoint = bestBid.add(bestAsk).divide(BigDecimal("2"), 8, java.math.RoundingMode.HALF_UP)
+                logger.debug("从订单簿获取估值价格（midpoint）: marketId=$marketId, outcomeIndex=$outcomeIndex, bestBid=$bestBid, bestAsk=$bestAsk, midpoint=$midpoint")
+                return midpoint
+            }
+            if (bestBid != null) {
+                logger.debug("从订单簿获取估值价格（bestBid）: marketId=$marketId, outcomeIndex=$outcomeIndex, bestBid=$bestBid, bestAsk=$bestAsk")
+                return bestBid
+            }
+            if (bestAsk != null && bestAsk > BigDecimal.ZERO) {
+                logger.debug("从订单簿获取估值价格（bestAsk）: marketId=$marketId, outcomeIndex=$outcomeIndex, bestAsk=$bestAsk")
+                return bestAsk
+            }
+
+            null
+        } catch (e: Exception) {
+            logger.debug("CLOB API 查询订单簿失败(估值): marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}")
+            null
+        }
+    }
     
     /**
      * 获取带鉴权的 CLOB API 客户端
@@ -349,4 +446,3 @@ class MarketPriceService(
     }
     
 }
-

@@ -105,6 +105,9 @@ class WebSocketSubscriptionService(
                 orderChannelCallbacks[sessionId] = callback
                 orderPushService.subscribeAllEnabled(callback)
             }
+            "notification" -> {
+                // notification 频道由其他服务主动广播，无需额外订阅上游数据源
+            }
             else -> {
                 logger.warn("未知的频道: $channel")
                 sendSubscribeAck(sessionId, channel, false, "未知的频道")
@@ -131,6 +134,19 @@ class WebSocketSubscriptionService(
                     orderPushService.unsubscribeAll(callback)
                 }
             }
+        }
+    }
+
+    /**
+     * 广播消息到指定频道的所有订阅会话
+     */
+    fun broadcast(channel: String, payload: Any) {
+        val sessionIds = channelSubscriptions[channel]?.toList() ?: emptyList()
+        if (sessionIds.isEmpty()) {
+            return
+        }
+        sessionIds.forEach { sessionId ->
+            pushData(sessionId, channel, payload)
         }
     }
     
@@ -168,4 +184,3 @@ class WebSocketSubscriptionService(
         }
     }
 }
-

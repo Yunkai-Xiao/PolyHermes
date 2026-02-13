@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.wrbug.polymarketbot.api.PolymarketClobApi
 import com.wrbug.polymarketbot.dto.NotificationConfigData
+import com.wrbug.polymarketbot.dto.RealtimeNotificationPushMessage
 import com.wrbug.polymarketbot.dto.TelegramConfigData
+import com.wrbug.polymarketbot.service.common.WebSocketSubscriptionService
 import com.wrbug.polymarketbot.util.createClient
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.DateUtils
@@ -14,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.MessageSource
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.stereotype.Service
@@ -27,7 +30,8 @@ import java.util.concurrent.TimeUnit
 class TelegramNotificationService(
     private val notificationConfigService: NotificationConfigService,
     private val objectMapper: ObjectMapper,
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val webSocketSubscriptionServiceProvider: ObjectProvider<WebSocketSubscriptionService>
 ) {
 
     private val logger = LoggerFactory.getLogger(TelegramNotificationService::class.java)
@@ -98,6 +102,10 @@ class TelegramNotificationService(
         locale: java.util.Locale? = null,
         leaderName: String? = null,  // Leader 名称（备注）
         configName: String? = null,  // 跟单配置名
+        leaderTradePrice: String? = null,  // Leader 成交价（可选，仅跟单场景）
+        bestOrderbookPrice: String? = null,  // 当前最优盘口价（BUY=bestAsk, SELL=bestBid）
+        clobMinOrderSize: String? = null,  // CLOB 最小下单量（shares）
+        clobTickSize: String? = null,  // CLOB 最小价格步长
         orderTime: Long? = null  // 订单创建时间（毫秒时间戳），用于通知中的时间显示
     ) {
         // 1. 如果提供了 orderId，检查是否已发送过通知（去重）
@@ -192,6 +200,10 @@ class TelegramNotificationService(
             locale = currentLocale,
             leaderName = leaderName,
             configName = configName,
+            leaderTradePrice = leaderTradePrice,
+            bestOrderbookPrice = bestOrderbookPrice,
+            clobMinOrderSize = clobMinOrderSize,
+            clobTickSize = clobTickSize,
             orderTime = orderTime
         )
         sendMessage(message)
@@ -212,6 +224,10 @@ class TelegramNotificationService(
         errorMessage: String,  // 只传递后端返回的 msg，不传递完整堆栈
         accountName: String? = null,
         walletAddress: String? = null,
+        leaderTradePrice: String? = null,  // Leader 成交价（可选，仅跟单场景）
+        bestOrderbookPrice: String? = null,  // 当前最优盘口价（BUY=bestAsk, SELL=bestBid）
+        clobMinOrderSize: String? = null,  // CLOB 最小下单量（shares）
+        clobTickSize: String? = null,  // CLOB 最小价格步长
         locale: java.util.Locale? = null
     ) {
         // 获取语言设置（优先使用传入的 locale，否则从 LocaleContextHolder 获取）
@@ -231,6 +247,12 @@ class TelegramNotificationService(
             logger.warn("计算订单金额失败: ${e.message}", e)
             null
         }
+        val notificationTitle = messageSource.getMessage(
+            "notification.order.created.failed",
+            null,
+            "订单创建失败",
+            currentLocale
+        )
 
         val message = buildOrderFailureMessage(
             marketTitle = marketTitle,
@@ -244,7 +266,35 @@ class TelegramNotificationService(
             errorMessage = errorMessage,
             accountName = accountName,
             walletAddress = walletAddress,
+            leaderTradePrice = leaderTradePrice,
+            bestOrderbookPrice = bestOrderbookPrice,
+            clobMinOrderSize = clobMinOrderSize,
+            clobTickSize = clobTickSize,
             locale = currentLocale
+        )
+
+        pushRealtimeNotification(
+            RealtimeNotificationPushMessage(
+                eventType = "ORDER_FAILURE",
+                level = "error",
+                title = notificationTitle ?: "订单创建失败",
+                marketTitle = marketTitle,
+                marketId = marketId,
+                marketSlug = marketSlug,
+                side = side,
+                outcome = outcome,
+                price = price,
+                size = size,
+                amount = amount,
+                accountName = accountName,
+                walletAddress = walletAddress,
+                errorMessage = errorMessage,
+                leaderTradePrice = leaderTradePrice,
+                bestOrderbookPrice = bestOrderbookPrice,
+                clobMinOrderSize = clobMinOrderSize,
+                clobTickSize = clobTickSize,
+                displayMessage = message
+            )
         )
         sendMessage(message)
     }
@@ -284,6 +334,12 @@ class TelegramNotificationService(
             logger.warn("计算订单金额失败: ${e.message}", e)
             null
         }
+        val notificationTitle = messageSource.getMessage(
+            "notification.order.filtered",
+            null,
+            "订单被过滤",
+            currentLocale
+        )
 
         val message = buildOrderFilteredMessage(
             marketTitle = marketTitle,
@@ -299,6 +355,27 @@ class TelegramNotificationService(
             accountName = accountName,
             walletAddress = walletAddress,
             locale = currentLocale
+        )
+
+        pushRealtimeNotification(
+            RealtimeNotificationPushMessage(
+                eventType = "ORDER_FILTERED",
+                level = "warning",
+                title = notificationTitle ?: "订单被过滤",
+                marketTitle = marketTitle,
+                marketId = marketId,
+                marketSlug = marketSlug,
+                side = side,
+                outcome = outcome,
+                price = price,
+                size = size,
+                amount = amount,
+                accountName = accountName,
+                walletAddress = walletAddress,
+                filterReason = filterReason,
+                filterType = filterType,
+                displayMessage = message
+            )
         )
         sendMessage(message)
     }
@@ -498,6 +575,17 @@ class TelegramNotificationService(
     }
 
     /**
+     * 通过统一 WebSocket 广播实时通知（notification 频道）
+     */
+    private fun pushRealtimeNotification(message: RealtimeNotificationPushMessage) {
+        try {
+            webSocketSubscriptionServiceProvider.ifAvailable?.broadcast("notification", message)
+        } catch (e: Exception) {
+            logger.warn("广播实时通知失败: eventType=${message.eventType}, error=${e.message}")
+        }
+    }
+
+    /**
      * 发送 Telegram 消息
      */
     private suspend fun sendTelegramMessage(config: TelegramConfigData, message: String): Boolean {
@@ -658,6 +746,49 @@ class TelegramNotificationService(
     }
 
     /**
+     * 格式化通用数值（默认最多8位小数，截断不四舍五入）
+     */
+    private fun formatNumber(value: String?, maxScale: Int = 8): String? {
+        if (value.isNullOrBlank()) {
+            return null
+        }
+        return try {
+            val decimal = value.toSafeBigDecimal()
+            if (decimal <= java.math.BigDecimal.ZERO) {
+                return null
+            }
+            val formatted = if (decimal.scale() > maxScale) {
+                decimal.setScale(maxScale, java.math.RoundingMode.DOWN).stripTrailingZeros()
+            } else {
+                decimal.stripTrailingZeros()
+            }
+            formatted.toPlainString()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 按参考价格估算 CLOB 最小下单金额（USDC）
+     */
+    private fun calculateEstimatedMinAmount(minOrderSize: String?, referencePrice: String?): String? {
+        if (minOrderSize.isNullOrBlank() || referencePrice.isNullOrBlank()) {
+            return null
+        }
+        return try {
+            val minSize = minOrderSize.toSafeBigDecimal()
+            val price = referencePrice.toSafeBigDecimal()
+            if (minSize <= java.math.BigDecimal.ZERO || price <= java.math.BigDecimal.ZERO) {
+                null
+            } else {
+                minSize.multiply(price).toPlainString()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * 构建账户信息显示（格式：账户名(钱包地址)）
      */
     private fun buildAccountInfo(
@@ -703,6 +834,10 @@ class TelegramNotificationService(
         locale: java.util.Locale,
         leaderName: String? = null,  // Leader 名称（备注）
         configName: String? = null,  // 跟单配置名
+        leaderTradePrice: String? = null,  // Leader 成交价（可选）
+        bestOrderbookPrice: String? = null,  // 当前最优盘口价（可选）
+        clobMinOrderSize: String? = null,  // CLOB 最小下单量（shares）
+        clobTickSize: String? = null,  // CLOB 最小价格步长
         orderTime: Long? = null  // 订单创建时间（毫秒时间戳）
     ): String {
         
@@ -718,6 +853,13 @@ class TelegramNotificationService(
         val amountLabel = messageSource.getMessage("notification.order.amount", null, "金额", locale)
         val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val bestAskLabel = messageSource.getMessage("notification.order.best_ask", null, "当前最佳Ask", locale)
+        val bestBidLabel = messageSource.getMessage("notification.order.best_bid", null, "当前最佳Bid", locale)
+        val leaderBuyPriceLabel = messageSource.getMessage("notification.order.leader_buy_price", null, "Leader买入价", locale)
+        val leaderSellPriceLabel = messageSource.getMessage("notification.order.leader_sell_price", null, "Leader卖出价", locale)
+        val clobMinOrderSizeLabel = messageSource.getMessage("notification.order.clob_min_order_size", null, "CLOB最小下单量", locale)
+        val clobTickSizeLabel = messageSource.getMessage("notification.order.clob_tick_size", null, "CLOB最小价格步长", locale)
+        val clobMinAmountLabel = messageSource.getMessage("notification.order.clob_est_min_amount", null, "CLOB估算最小金额", locale)
         val unknown = messageSource.getMessage("common.unknown", null, "未知", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", locale)
@@ -815,6 +957,41 @@ class TelegramNotificationService(
         // 格式化价格和数量
         val priceDisplay = formatPrice(price)
         val sizeDisplay = formatQuantity(size)
+        val leaderTradePriceDisplay = leaderTradePrice?.let { formatPrice(it) }
+        val bestOrderbookPriceDisplay = bestOrderbookPrice?.let { formatPrice(it) }
+        val leaderTradePriceLabel = if (side.uppercase() == "BUY") leaderBuyPriceLabel else leaderSellPriceLabel
+        val bestOrderbookPriceLabel = if (side.uppercase() == "BUY") bestAskLabel else bestBidLabel
+        val leaderTradePriceLine = if (!leaderTradePriceDisplay.isNullOrBlank()) {
+            "\n• $leaderTradePriceLabel: <code>$leaderTradePriceDisplay</code>"
+        } else {
+            ""
+        }
+        val bestOrderbookPriceLine = if (!bestOrderbookPriceDisplay.isNullOrBlank()) {
+            "\n• $bestOrderbookPriceLabel: <code>$bestOrderbookPriceDisplay</code>"
+        } else {
+            ""
+        }
+        val clobMinOrderSizeDisplay = formatNumber(clobMinOrderSize)
+        val clobTickSizeDisplay = formatNumber(clobTickSize)
+        val clobMinOrderSizeLine = if (clobMinOrderSizeDisplay != null) {
+            "\n• $clobMinOrderSizeLabel: <code>$clobMinOrderSizeDisplay</code> shares"
+        } else {
+            ""
+        }
+        val clobTickSizeLine = if (clobTickSizeDisplay != null) {
+            "\n• $clobTickSizeLabel: <code>$clobTickSizeDisplay</code>"
+        } else {
+            ""
+        }
+        val clobMinAmountDisplay = calculateEstimatedMinAmount(
+            minOrderSize = clobMinOrderSize,
+            referencePrice = bestOrderbookPrice ?: price
+        )?.let { formatNumber(it, 8) }
+        val clobMinAmountLine = if (clobMinAmountDisplay != null) {
+            "\n• $clobMinAmountLabel: <code>$clobMinAmountDisplay</code> USDC"
+        } else {
+            ""
+        }
 
         return """$icon <b>$orderCreatedSuccess</b>
 
@@ -822,7 +999,7 @@ class TelegramNotificationService(
 • $orderIdLabel: <code>${orderId ?: unknown}</code>
 • $marketLabel: $marketDisplay$outcomeDisplay
 • $sideLabel: <b>$sideDisplay</b>
-• $priceLabel: <code>$priceDisplay</code>
+• $priceLabel: <code>$priceDisplay</code>$bestOrderbookPriceLine$leaderTradePriceLine$clobMinOrderSizeLine$clobTickSizeLine$clobMinAmountLine
 • $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
 • $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo
@@ -845,6 +1022,10 @@ class TelegramNotificationService(
         errorMessage: String,
         accountName: String?,
         walletAddress: String?,
+        leaderTradePrice: String? = null,
+        bestOrderbookPrice: String? = null,
+        clobMinOrderSize: String? = null,
+        clobTickSize: String? = null,
         locale: java.util.Locale
     ): String {
         
@@ -860,6 +1041,13 @@ class TelegramNotificationService(
         val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
         val errorInfo = messageSource.getMessage("notification.order.error_info", null, "错误信息", locale)
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val bestAskLabel = messageSource.getMessage("notification.order.best_ask", null, "当前最佳Ask", locale)
+        val bestBidLabel = messageSource.getMessage("notification.order.best_bid", null, "当前最佳Bid", locale)
+        val leaderBuyPriceLabel = messageSource.getMessage("notification.order.leader_buy_price", null, "Leader买入价", locale)
+        val leaderSellPriceLabel = messageSource.getMessage("notification.order.leader_sell_price", null, "Leader卖出价", locale)
+        val clobMinOrderSizeLabel = messageSource.getMessage("notification.order.clob_min_order_size", null, "CLOB最小下单量", locale)
+        val clobTickSizeLabel = messageSource.getMessage("notification.order.clob_tick_size", null, "CLOB最小价格步长", locale)
+        val clobMinAmountLabel = messageSource.getMessage("notification.order.clob_est_min_amount", null, "CLOB估算最小金额", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", locale)
         
@@ -933,13 +1121,48 @@ class TelegramNotificationService(
         // 格式化价格和数量
         val priceDisplay = formatPrice(price)
         val sizeDisplay = formatQuantity(size)
+        val leaderTradePriceDisplay = leaderTradePrice?.let { formatPrice(it) }
+        val bestOrderbookPriceDisplay = bestOrderbookPrice?.let { formatPrice(it) }
+        val leaderTradePriceLabel = if (side.uppercase() == "BUY") leaderBuyPriceLabel else leaderSellPriceLabel
+        val bestOrderbookPriceLabel = if (side.uppercase() == "BUY") bestAskLabel else bestBidLabel
+        val leaderTradePriceLine = if (!leaderTradePriceDisplay.isNullOrBlank()) {
+            "\n• $leaderTradePriceLabel: <code>$leaderTradePriceDisplay</code>"
+        } else {
+            ""
+        }
+        val bestOrderbookPriceLine = if (!bestOrderbookPriceDisplay.isNullOrBlank()) {
+            "\n• $bestOrderbookPriceLabel: <code>$bestOrderbookPriceDisplay</code>"
+        } else {
+            ""
+        }
+        val clobMinOrderSizeDisplay = formatNumber(clobMinOrderSize)
+        val clobTickSizeDisplay = formatNumber(clobTickSize)
+        val clobMinOrderSizeLine = if (clobMinOrderSizeDisplay != null) {
+            "\n• $clobMinOrderSizeLabel: <code>$clobMinOrderSizeDisplay</code> shares"
+        } else {
+            ""
+        }
+        val clobTickSizeLine = if (clobTickSizeDisplay != null) {
+            "\n• $clobTickSizeLabel: <code>$clobTickSizeDisplay</code>"
+        } else {
+            ""
+        }
+        val clobMinAmountDisplay = calculateEstimatedMinAmount(
+            minOrderSize = clobMinOrderSize,
+            referencePrice = bestOrderbookPrice ?: price
+        )?.let { formatNumber(it, 8) }
+        val clobMinAmountLine = if (clobMinAmountDisplay != null) {
+            "\n• $clobMinAmountLabel: <code>$clobMinAmountDisplay</code> USDC"
+        } else {
+            ""
+        }
 
         return """❌ <b>$orderCreatedFailed</b>
 
 📊 <b>$orderInfo：</b>
 • $marketLabel: $marketDisplay$outcomeDisplay
 • $sideLabel: <b>$sideDisplay</b>
-• $priceLabel: <code>$priceDisplay</code>
+• $priceLabel: <code>$priceDisplay</code>$bestOrderbookPriceLine$leaderTradePriceLine$clobMinOrderSizeLine$clobTickSizeLine$clobMinAmountLine
 • $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
 • $accountLabel: $escapedAccountInfo
@@ -1067,4 +1290,3 @@ $positionsText
         return "${address.substring(0, 6)}...${address.substring(address.length - 4)}"
     }
 }
-

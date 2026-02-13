@@ -71,9 +71,11 @@ data class MarketResponse(
     val lastTradePrice: Double? = null,
     val bestBid: Double? = null,
     val bestAsk: Double? = null,
+    val closedTime: String? = null,  // 结算关闭时间（例如 "2020-11-02 16:31:01+00"）
+    val resolvedBy: String? = null,  // 结算者（可选）
+    val umaResolutionStatus: String? = null,  // UMA 结算状态（可选）
     val events: List<EventResponse>? = null,  // 事件列表（从 events[0] 获取 slug）
     // 以下字段可能存在于响应中，但不在标准文档中
     val clobTokenIds: String? = null,  // CLOB token IDs（可能是 JSON 字符串或数组）
     val clob_token_ids: String? = null  // 下划线格式（兼容不同 API 版本）
 )
-

@@ -69,6 +69,12 @@ class OrderStatusUpdateService(
     // 订单详情为 null 的重试时间窗口（1分钟）
     private val ORDER_NULL_RETRY_WINDOW_MS = 60000L
 
+    private data class OrderbookNotifyData(
+        val bestPrice: String? = null,
+        val minOrderSize: String? = null,
+        val tickSize: String? = null
+    )
+
     @EventListener(ApplicationReadyEvent::class)
     fun onApplicationReady() {
         logger.info("订单状态更新服务已启动，将每5秒轮询一次")
@@ -931,6 +937,8 @@ class OrderStatusUpdateService(
                 } else {
                     null
                 }
+            val leaderTradePrice = fetchLeaderTradePrice(finalClobApi, order.leaderBuyTradeId)
+            val orderbookNotifyData = fetchOrderbookNotifyData(finalClobApi, order.buyOrderId, "BUY")
 
             // 发送通知
             telegramNotificationService.sendOrderSuccessNotification(
@@ -952,6 +960,10 @@ class OrderStatusUpdateService(
                 locale = locale,
                 leaderName = leaderName,
                 configName = configName,
+                leaderTradePrice = leaderTradePrice,
+                bestOrderbookPrice = orderbookNotifyData.bestPrice,
+                clobMinOrderSize = orderbookNotifyData.minOrderSize,
+                clobTickSize = orderbookNotifyData.tickSize,
                 orderTime = orderCreatedAt  // 使用订单创建时间
             )
 
@@ -1024,6 +1036,8 @@ class OrderStatusUpdateService(
                 } else {
                     null
                 }
+            val leaderTradePrice = fetchLeaderTradePrice(finalClobApi, record.leaderSellTradeId)
+            val orderbookNotifyData = fetchOrderbookNotifyData(finalClobApi, record.sellOrderId, "SELL")
 
             // 发送通知
             telegramNotificationService.sendOrderSuccessNotification(
@@ -1045,6 +1059,10 @@ class OrderStatusUpdateService(
                 locale = locale,
                 leaderName = leaderName,
                 configName = configName,
+                leaderTradePrice = leaderTradePrice,
+                bestOrderbookPrice = orderbookNotifyData.bestPrice,
+                clobMinOrderSize = orderbookNotifyData.minOrderSize,
+                clobTickSize = orderbookNotifyData.tickSize,
                 orderTime = orderCreatedAt  // 使用订单创建时间
             )
 
@@ -1053,5 +1071,94 @@ class OrderStatusUpdateService(
             logger.warn("发送卖出订单通知失败: orderId=${record.sellOrderId}, error=${e.message}", e)
         }
     }
-}
 
+    /**
+     * 查询 Leader 成交价
+     * 通过 leaderTradeId 从 /data/trades 获取对应成交价
+     */
+    private suspend fun fetchLeaderTradePrice(clobApi: PolymarketClobApi?, leaderTradeId: String?): String? {
+        if (clobApi == null || leaderTradeId.isNullOrBlank()) {
+            return null
+        }
+        return try {
+            val response = clobApi.getTrades(id = leaderTradeId)
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string()?.take(200) ?: "无错误详情"
+                logger.debug("查询 Leader 成交价失败: leaderTradeId=$leaderTradeId, code=${response.code()}, errorBody=$errorBody")
+                return null
+            }
+            response.body()?.data?.firstOrNull()?.price
+        } catch (e: Exception) {
+            logger.debug("查询 Leader 成交价异常: leaderTradeId=$leaderTradeId, error=${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 查询通知所需的订单簿信息
+     * BUY 返回 bestAsk，SELL 返回 bestBid，同时返回 minOrderSize 和 tickSize
+     */
+    private suspend fun fetchOrderbookNotifyData(
+        clobApi: PolymarketClobApi?,
+        orderId: String?,
+        side: String
+    ): OrderbookNotifyData {
+        if (clobApi == null || orderId.isNullOrBlank() || !orderId.startsWith("0x", ignoreCase = true)) {
+            return OrderbookNotifyData()
+        }
+        return try {
+            val orderResponse = clobApi.getOrder(orderId)
+            if (!orderResponse.isSuccessful) {
+                val errorBody = orderResponse.errorBody()?.string()?.take(200) ?: "无错误详情"
+                logger.debug("查询订单详情失败，无法获取盘口价: orderId=$orderId, code=${orderResponse.code()}, errorBody=$errorBody")
+                return OrderbookNotifyData()
+            }
+            val assetId = orderResponse.body()?.assetId
+            if (assetId.isNullOrBlank()) {
+                logger.debug("订单详情缺少 assetId，无法获取盘口价: orderId=$orderId")
+                return OrderbookNotifyData()
+            }
+
+            val orderbookResponse = clobApi.getOrderbook(tokenId = assetId, market = null)
+            if (!orderbookResponse.isSuccessful) {
+                val errorBody = orderbookResponse.errorBody()?.string()?.take(200) ?: "无错误详情"
+                logger.debug("查询订单簿失败: assetId=$assetId, code=${orderbookResponse.code()}, errorBody=$errorBody")
+                return OrderbookNotifyData()
+            }
+            val orderbook = orderbookResponse.body() ?: return OrderbookNotifyData()
+
+            val bestPrice = if (side.uppercase() == "BUY") {
+                orderbook.asks
+                    .map { it.price.toSafeBigDecimal() }
+                    .filter { it > BigDecimal.ZERO }
+                    .minOrNull()
+            } else {
+                orderbook.bids
+                    .map { it.price.toSafeBigDecimal() }
+                    .filter { it > BigDecimal.ZERO }
+                    .maxOrNull()
+            }?.stripTrailingZeros()?.toPlainString()
+
+            val minOrderSize = orderbook.minOrderSize
+                ?.toSafeBigDecimal()
+                ?.takeIf { it > BigDecimal.ZERO }
+                ?.stripTrailingZeros()
+                ?.toPlainString()
+
+            val tickSize = orderbook.tickSize
+                ?.toSafeBigDecimal()
+                ?.takeIf { it > BigDecimal.ZERO }
+                ?.stripTrailingZeros()
+                ?.toPlainString()
+
+            OrderbookNotifyData(
+                bestPrice = bestPrice,
+                minOrderSize = minOrderSize,
+                tickSize = tickSize
+            )
+        } catch (e: Exception) {
+            logger.debug("查询最佳盘口价异常: orderId=$orderId, side=$side, error=${e.message}")
+            OrderbookNotifyData()
+        }
+    }
+}

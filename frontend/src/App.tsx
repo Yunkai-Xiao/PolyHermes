@@ -34,6 +34,7 @@ import RpcNodeSettings from './pages/RpcNodeSettings'
 import Announcements from './pages/Announcements'
 import BacktestList from './pages/BacktestList'
 import BacktestDetail from './pages/BacktestDetail'
+import RealtimeNotifications from './pages/RealtimeNotifications'
 import { wsManager } from './services/websocket'
 import type { OrderPushMessage } from './types'
 import { apiService } from './services/api'
@@ -262,6 +263,7 @@ function App() {
           <Route path="/config" element={<ProtectedRoute><ConfigPage /></ProtectedRoute>} />
           <Route path="/positions" element={<ProtectedRoute><PositionList /></ProtectedRoute>} />
           <Route path="/statistics" element={<ProtectedRoute><Statistics /></ProtectedRoute>} />
+          <Route path="/notifications/realtime" element={<ProtectedRoute><RealtimeNotifications /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
           <Route path="/system-settings" element={<ProtectedRoute><SystemSettings /></ProtectedRoute>} />

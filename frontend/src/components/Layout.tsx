@@ -21,7 +21,8 @@ import {
   SendOutlined,
   ApiOutlined,
   NotificationOutlined,
-  LineChartOutlined
+  LineChartOutlined,
+  BellOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -166,6 +167,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/statistics',
       icon: <BarChartOutlined />,
       label: t('menu.statistics')
+    },
+    {
+      key: '/notifications/realtime',
+      icon: <BellOutlined />,
+      label: t('menu.realtimeNotifications') || '实时通知'
     },
     {
       key: '/users',

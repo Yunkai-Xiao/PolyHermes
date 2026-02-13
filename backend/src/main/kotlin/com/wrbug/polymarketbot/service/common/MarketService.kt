@@ -2,8 +2,9 @@ package com.wrbug.polymarketbot.service.common
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.wrbug.polymarketbot.api.MarketResponse
-import com.wrbug.polymarketbot.api.PolymarketGammaApi
 import com.wrbug.polymarketbot.entity.Market
 import com.wrbug.polymarketbot.repository.MarketRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
@@ -12,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
 /**
@@ -21,7 +23,8 @@ import java.time.format.DateTimeFormatter
 @Service
 class MarketService(
     val marketRepository: MarketRepository,  // 改为 public，供 MarketPollingService 使用
-    private val retrofitFactory: RetrofitFactory
+    private val retrofitFactory: RetrofitFactory,
+    private val gson: Gson
 ) {
 
     private val logger = LoggerFactory.getLogger(MarketService::class.java)
@@ -29,6 +32,11 @@ class MarketService(
     // LRU 缓存（避免频繁查询数据库），最多缓存 200 条记录
     private val marketCache: Cache<String, Market> = Caffeine.newBuilder()
         .maximumSize(200)  // 最多缓存 200 条记录
+        .build()
+
+    // outcome index 缓存：marketId -> (normalizedOutcome -> index)
+    private val outcomeIndexCache: Cache<String, Map<String, Int>> = Caffeine.newBuilder()
+        .maximumSize(1_000)
         .build()
     
     /**
@@ -42,6 +50,21 @@ class MarketService(
         // 2. 从数据库查询
         val market = marketRepository.findByMarketId(marketId)
         if (market != null) {
+            // 已关闭但没有结算时间时，尝试刷新一次以补全 resolvedAt
+            if (market.closed && market.resolvedAt == null) {
+                runBlocking {
+                    try {
+                        fetchAndSaveMarket(marketId)
+                    } catch (e: Exception) {
+                        logger.warn("刷新市场结算时间失败: marketId=$marketId, error=${e.message}")
+                    }
+                }
+                val refreshed = marketRepository.findByMarketId(marketId)
+                if (refreshed != null) {
+                    marketCache.put(marketId, refreshed)
+                    return refreshed
+                }
+            }
             marketCache.put(marketId, market)
             return market
         }
@@ -58,6 +81,56 @@ class MarketService(
         // 再次从数据库查询（API可能已经保存）
         return marketRepository.findByMarketId(marketId)?.also {
             marketCache.put(marketId, it)
+        }
+    }
+
+    /**
+     * 根据 outcome 名称解析其在市场 outcomes 列表中的索引。
+     * 用于在 activity 缺失 outcomeIndex 时补全（避免 SELL/结算方向错）。
+     */
+    suspend fun getOutcomeIndex(marketId: String, outcome: String?): Int? {
+        val normalizedOutcome = outcome?.trim()?.lowercase().orEmpty()
+        if (normalizedOutcome.isBlank()) {
+            return null
+        }
+        // outcome 有时就是数字字符串
+        normalizedOutcome.toIntOrNull()?.let { return it }
+
+        val cached = outcomeIndexCache.getIfPresent(marketId)
+        if (cached != null) {
+            return cached[normalizedOutcome]
+        }
+
+        return try {
+            val gammaApi = retrofitFactory.createGammaApi()
+            val response = gammaApi.listMarkets(conditionIds = listOf(marketId))
+            if (!response.isSuccessful || response.body().isNullOrEmpty()) {
+                return null
+            }
+            val market = response.body()!!.firstOrNull() ?: return null
+            val outcomesStr = market.outcomes ?: return null
+
+            val outcomes: List<String> = try {
+                gson.fromJson(outcomesStr, object : TypeToken<List<String>>() {}.type)
+            } catch (_: Exception) {
+                // fallback: very simple parsing for lenient formats
+                outcomesStr.trim()
+                    .removeSurrounding("[", "]")
+                    .split(",")
+                    .map { it.trim().removeSurrounding("\"") }
+                    .filter { it.isNotBlank() }
+            }
+
+            val map = outcomes.mapIndexedNotNull { idx, name ->
+                val n = name.trim().lowercase()
+                if (n.isBlank()) null else n to idx
+            }.toMap()
+
+            outcomeIndexCache.put(marketId, map)
+            map[normalizedOutcome]
+        } catch (e: Exception) {
+            logger.debug("解析 outcomeIndex 失败: marketId=$marketId, outcome=$outcome, error=${e.message}")
+            null
         }
     }
     
@@ -156,6 +229,11 @@ class MarketService(
     private fun saveMarketFromResponse(marketId: String, marketResponse: MarketResponse): Market? {
         return try {
             val existingMarket = marketRepository.findByMarketId(marketId)
+            val resolvedAt = parseResolvedAt(
+                closed = marketResponse.closed,
+                closedTime = marketResponse.closedTime,
+                endDate = marketResponse.endDate
+            )
             
             // 保存原来的 slug（用于显示）
             val slug = marketResponse.slug
@@ -176,6 +254,7 @@ class MarketService(
                     closed = marketResponse.closed ?: existingMarket.closed,
                     archived = marketResponse.archived ?: existingMarket.archived,
                     endDate = parseEndDate(marketResponse.endDate),
+                    resolvedAt = resolvedAt ?: existingMarket.resolvedAt,
                     updatedAt = System.currentTimeMillis()
                 )
             } else {
@@ -193,6 +272,7 @@ class MarketService(
                     closed = marketResponse.closed ?: false,
                     archived = marketResponse.archived ?: false,
                     endDate = parseEndDate(marketResponse.endDate),
+                    resolvedAt = resolvedAt,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
@@ -230,5 +310,42 @@ class MarketService(
             null
         }
     }
-}
 
+    /**
+     * 解析市场结算时间：
+     * 1) 优先使用 closedTime（最接近 resolved_at）
+     * 2) closed=true 且 closedTime 为空时，回退到 endDate
+     */
+    private fun parseResolvedAt(closed: Boolean?, closedTime: String?, endDate: String?): Long? {
+        val parsedClosedTime = parseClosedTime(closedTime)
+        if (parsedClosedTime != null) {
+            return parsedClosedTime
+        }
+        if (closed == true) {
+            return parseEndDate(endDate)
+        }
+        return null
+    }
+
+    /**
+     * closedTime 示例: 2020-11-02 16:31:01+00
+     */
+    private fun parseClosedTime(closedTime: String?): Long? {
+        if (closedTime.isNullOrBlank()) {
+            return null
+        }
+        return try {
+            OffsetDateTime.parse(
+                closedTime,
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ssX")
+            ).toInstant().toEpochMilli()
+        } catch (first: Exception) {
+            try {
+                Instant.parse(closedTime).toEpochMilli()
+            } catch (second: Exception) {
+                logger.warn("解析市场结算时间失败: closedTime=$closedTime, error=${second.message}")
+                null
+            }
+        }
+    }
+}

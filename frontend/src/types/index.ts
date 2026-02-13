@@ -578,6 +578,34 @@ export interface OrderPushMessage {
 }
 
 /**
+ * 实时通知推送消息（notification 频道）
+ */
+export interface RealtimeNotificationPushMessage {
+  eventType: 'ORDER_FAILURE' | 'ORDER_FILTERED' | string
+  level: 'error' | 'warning' | 'info' | 'success' | string
+  title: string
+  marketTitle?: string
+  marketId?: string
+  marketSlug?: string
+  side?: string
+  outcome?: string
+  price?: string
+  size?: string
+  amount?: string
+  accountName?: string
+  walletAddress?: string
+  errorMessage?: string
+  filterReason?: string
+  filterType?: string
+  leaderTradePrice?: string
+  bestOrderbookPrice?: string
+  clobMinOrderSize?: string
+  clobTickSize?: string
+  displayMessage?: string
+  timestamp: number
+}
+
+/**
  * 账户赎回仓位项（包含账户ID）
  */
 export interface AccountRedeemPositionItem {

@@ -25,6 +25,7 @@ import com.wrbug.polymarketbot.service.system.TelegramNotificationService
 import com.wrbug.polymarketbot.util.CryptoUtils
 import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationContextAware
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -52,7 +53,11 @@ open class CopyOrderTrackingService(
     private val retrofitFactory: RetrofitFactory,
     private val cryptoUtils: CryptoUtils,
     private val marketService: MarketService,  // 市场信息服务
-    private val telegramNotificationService: TelegramNotificationService? = null  // 可选，避免循环依赖
+    private val telegramNotificationService: TelegramNotificationService? = null,  // 可选，避免循环依赖
+    @Value("\${copytrading.buy-short-buffer.enabled:true}")
+    private val buyShortBufferEnabled: Boolean = true,
+    @Value("\${copytrading.buy-short-buffer.window-ms:120}")
+    private val buyShortBufferWindowMs: Long = 120L
 ) : ApplicationContextAware {
 
     private val logger = LoggerFactory.getLogger(CopyOrderTrackingService::class.java)
@@ -76,6 +81,9 @@ open class CopyOrderTrackingService(
 
     // 使用 Mutex 保证线程安全（按交易ID锁定）
     private val tradeMutexMap = ConcurrentHashMap<String, Mutex>()
+    // 短窗口聚合（按 copyTrading + market + outcomeIndex）
+    private val buyBurstBufferMap = ConcurrentHashMap<String, BuyBurstBufferState>()
+    private val buyBurstMutexMap = ConcurrentHashMap<String, Mutex>()
 
     // 订单创建重试配置
     companion object {
@@ -83,12 +91,114 @@ open class CopyOrderTrackingService(
         private const val RETRY_DELAY_MS = 3000L  // 重试前等待时间（毫秒，3秒）
     }
 
+    private data class BuyBurstBufferState(
+        var windowId: Long = 0L,
+        var windowEndAt: Long = 0L,
+        var totalQuantity: BigDecimal = BigDecimal.ZERO,
+        var latestTradePrice: BigDecimal = BigDecimal.ZERO,
+        var latestTradeId: String = ""
+    )
+
+    private data class BuyBurstAggregationResult(
+        val quantity: BigDecimal,
+        val effectiveTradePrice: BigDecimal,
+        val representativeTradeId: String
+    )
+
     /**
      * 获取或创建 Mutex（按交易ID）
      */
     private fun getMutex(leaderId: Long, tradeId: String): Mutex {
         val key = "${leaderId}_${tradeId}"
         return tradeMutexMap.getOrPut(key) { Mutex() }
+    }
+
+    private fun getBuyBurstMutex(key: String): Mutex {
+        return buyBurstMutexMap.getOrPut(key) { Mutex() }
+    }
+
+    private fun buildBuyBurstKey(copyTradingId: Long, marketId: String, outcomeIndex: Int?): String {
+        return "${copyTradingId}_${marketId}_${outcomeIndex ?: -1}"
+    }
+
+    /**
+     * 在毫秒级短窗口内聚合买入数量：
+     * - 窗口内到达的多笔会累加
+     * - 仅一个协程负责窗口到期后的“最终下单量”输出
+     * - 其余协程返回 null，表示该笔已被合并，不单独下单
+     */
+    private suspend fun aggregateBuyQuantityInShortWindow(
+        copyTradingId: Long,
+        marketId: String,
+        outcomeIndex: Int?,
+        tradeId: String,
+        tradePrice: BigDecimal,
+        buyQuantity: BigDecimal
+    ): BuyBurstAggregationResult? {
+        if (!buyShortBufferEnabled || buyShortBufferWindowMs <= 0L) {
+            return BuyBurstAggregationResult(
+                quantity = buyQuantity,
+                effectiveTradePrice = tradePrice,
+                representativeTradeId = tradeId
+            )
+        }
+
+        val key = buildBuyBurstKey(copyTradingId, marketId, outcomeIndex)
+        val mutex = getBuyBurstMutex(key)
+
+        var myWindowId = 0L
+        var waitUntil = 0L
+
+        mutex.withLock {
+            val now = System.currentTimeMillis()
+            val state = buyBurstBufferMap.getOrPut(key) { BuyBurstBufferState() }
+
+            // 新窗口：首次进入或上一个窗口已被清空
+            if (state.windowId == 0L) {
+                state.windowId = 1L
+                state.windowEndAt = now + buyShortBufferWindowMs
+                state.totalQuantity = buyQuantity
+                state.latestTradePrice = tradePrice
+                state.latestTradeId = tradeId
+            } else {
+                // 追加到当前窗口（即使窗口刚过期但尚未flush，也并入同一批，避免漏单）
+                state.totalQuantity = state.totalQuantity.add(buyQuantity)
+                state.latestTradePrice = tradePrice
+                state.latestTradeId = tradeId
+                if (state.windowEndAt < now) {
+                    state.windowEndAt = now
+                }
+            }
+
+            myWindowId = state.windowId
+            waitUntil = state.windowEndAt
+        }
+
+        val now = System.currentTimeMillis()
+        if (waitUntil > now) {
+            delay(waitUntil - now)
+        }
+
+        return mutex.withLock {
+            val state = buyBurstBufferMap[key] ?: return@withLock null
+
+            // 不是当前窗口的flush者（已被其他协程处理）
+            if (state.windowId != myWindowId) {
+                return@withLock null
+            }
+
+            if (System.currentTimeMillis() < state.windowEndAt) {
+                return@withLock null
+            }
+
+            val result = BuyBurstAggregationResult(
+                quantity = state.totalQuantity,
+                effectiveTradePrice = state.latestTradePrice,
+                representativeTradeId = state.latestTradeId
+            )
+            buyBurstBufferMap.remove(key)
+            result
+        }
     }
 
     /**
@@ -274,12 +384,36 @@ open class CopyOrderTrackingService(
 
                     // 先计算跟单金额（用于仓位检查）
                     // 注意：这里先计算金额，即使后续被过滤也会记录
-                    val tradePrice = trade.price.toSafeBigDecimal()
+                    var effectiveTradeId = trade.id
+                    var tradePrice = trade.price.toSafeBigDecimal()
                     var buyQuantity = try {
                         calculateBuyQuantity(trade, copyTrading)
                     } catch (e: Exception) {
                         logger.warn("计算买入数量失败: ${e.message}", e)
                         continue
+                    }
+
+                    // 比例模式：毫秒级短窗口合并
+                    if (copyTrading.copyMode == "RATIO") {
+                        val aggregationResult = aggregateBuyQuantityInShortWindow(
+                            copyTradingId = copyTrading.id!!,
+                            marketId = trade.market,
+                            outcomeIndex = trade.outcomeIndex,
+                            tradeId = trade.id,
+                            tradePrice = tradePrice,
+                            buyQuantity = buyQuantity
+                        )
+
+                        if (aggregationResult == null) {
+                            logger.debug(
+                                "短窗口聚合中，当前trade不单独下单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, windowMs=$buyShortBufferWindowMs"
+                            )
+                            continue
+                        }
+
+                        buyQuantity = aggregationResult.quantity
+                        tradePrice = aggregationResult.effectiveTradePrice
+                        effectiveTradeId = aggregationResult.representativeTradeId
                     }
 
                     // 计算跟单金额（USDC）= 买入数量 × 价格
@@ -412,10 +546,23 @@ open class CopyOrderTrackingService(
                         logger.warn("计算得到的买入数量小于1，自动调整为1 (Polymarket 最小下单数量): copyTradingId=${copyTrading.id}, tradeId=${trade.id}, originalQuantity=$buyQuantity")
                         buyQuantity = BigDecimal.ONE
                     }
+
+                    // 比例模式：短窗口结束后，如果仍小于 CLOB 最小下单量，则按 CLOB 最小下单量下单
+                    if (copyTrading.copyMode == "RATIO") {
+                        val clobMinOrderSize = orderbook?.minOrderSize
+                            ?.toSafeBigDecimal()
+                            ?.takeIf { it > BigDecimal.ZERO }
+
+                        if (clobMinOrderSize != null && buyQuantity.lt(clobMinOrderSize)) {
+                            logger.info(
+                                "短窗口聚合后数量仍低于CLOB最小下单量，按最小下单量下单: copyTradingId=${copyTrading.id}, tradeId=$effectiveTradeId, aggregatedQuantity=$buyQuantity, clobMinOrderSize=$clobMinOrderSize, windowMs=$buyShortBufferWindowMs"
+                            )
+                            buyQuantity = clobMinOrderSize
+                        }
+                    }
                     // 验证订单数量限制（仅比例模式）
                     var finalBuyQuantity = buyQuantity
                     if (copyTrading.copyMode == "RATIO") {
-                        val tradePrice = trade.price.toSafeBigDecimal()
                         val rawOrderAmount = buyQuantity.multi(tradePrice)
 
                         // 对按比例计算的金额进行向上取整处理（确保满足最小限制）
@@ -493,7 +640,7 @@ open class CopyOrderTrackingService(
                     }
 
                     // 计算价格（应用价格容忍度）
-                    val buyPrice = calculateAdjustedPrice(trade.price.toSafeBigDecimal(), copyTrading, isBuy = true)
+                    val buyPrice = calculateAdjustedPrice(tradePrice, copyTrading, isBuy = true)
                     logger.debug("计算价格结果：$buyPrice")
                     // 在创建订单前，检查订单簿中是否有可匹配的订单（避免 FAK 订单失败）
                     // 如果过滤检查时已经获取了订单簿，直接使用；否则重新获取
@@ -505,12 +652,24 @@ open class CopyOrderTrackingService(
                             null
                         }
                     }
+                    val bestAskForNotification = orderbookForCheck?.asks
+                        ?.map { it.price.toSafeBigDecimal() }
+                        ?.filter { it > BigDecimal.ZERO }
+                        ?.minOrNull()
+                    val minOrderSizeForNotification = orderbookForCheck?.minOrderSize
+                        ?.toSafeBigDecimal()
+                        ?.takeIf { it > BigDecimal.ZERO }
+                        ?.stripTrailingZeros()
+                        ?.toPlainString()
+                    val tickSizeForNotification = orderbookForCheck?.tickSize
+                        ?.toSafeBigDecimal()
+                        ?.takeIf { it > BigDecimal.ZERO }
+                        ?.stripTrailingZeros()
+                        ?.toPlainString()
 
                     // 检查是否有可匹配的卖单（asks）
                     if (orderbookForCheck != null) {
-                        val bestAsk = orderbookForCheck.asks
-                            .mapNotNull { it.price.toSafeBigDecimal() }
-                            .minOrNull()
+                        val bestAsk = bestAskForNotification
 
                         if (bestAsk == null) {
                             logger.warn("订单簿中没有卖单，跳过创建订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}")
@@ -558,7 +717,7 @@ open class CopyOrderTrackingService(
                         "0"
                     }
 
-                    logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity, baseFee=$feeRateBps")
+                    logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=$effectiveTradeId, leaderPrice=${tradePrice.toPlainString()}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity, baseFee=$feeRateBps")
 
                     // 调用API创建订单（带重试机制）
                     // 重试策略：最多重试 MAX_RETRY_ATTEMPTS 次，每次重试前等待 RETRY_DELAY_MS 毫秒
@@ -573,7 +732,7 @@ open class CopyOrderTrackingService(
                         size = finalBuyQuantity.toString(),
                         owner = account.apiKey,
                         copyTradingId = copyTrading.id!!,
-                        tradeId = trade.id,
+                        tradeId = effectiveTradeId,
                         feeRateBps = feeRateBps
                     )
 
@@ -581,7 +740,7 @@ open class CopyOrderTrackingService(
                     if (createOrderResult.isFailure) {
                         // 提取错误信息（只保留 code 和 errorBody）
                         val exception = createOrderResult.exceptionOrNull()
-                        logger.error("创建买入订单失败: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, myPrice=$buyPrice, error=${exception?.message}")
+                        logger.error("创建买入订单失败: copyTradingId=${copyTrading.id}, tradeId=$effectiveTradeId, leaderPrice=${tradePrice.toPlainString()}, myPrice=$buyPrice, error=${exception?.message}")
 
                         // 发送订单失败通知（异步，不阻塞，仅在 pushFailedOrders 为 true 时发送）
                         if (copyTrading.pushFailedOrders) {
@@ -610,6 +769,10 @@ open class CopyOrderTrackingService(
                                         errorMessage = exception?.message.orEmpty(),  // 只传递后端返回的 msg
                                         accountName = account.accountName,
                                         walletAddress = account.walletAddress,
+                                        leaderTradePrice = tradePrice.toPlainString(),
+                                        bestOrderbookPrice = bestAskForNotification?.stripTrailingZeros()?.toPlainString(),
+                                        clobMinOrderSize = minOrderSizeForNotification,
+                                        clobTickSize = tickSizeForNotification,
                                         locale = locale
                                     )
                                 } catch (e: Exception) {
@@ -639,7 +802,7 @@ open class CopyOrderTrackingService(
                         side = trade.outcomeIndex.toString(),  // 使用outcomeIndex作为side（兼容旧数据）
                         outcomeIndex = trade.outcomeIndex,  // 新增字段
                         buyOrderId = realOrderId,  // 使用真实订单ID
-                        leaderBuyTradeId = trade.id,
+                        leaderBuyTradeId = effectiveTradeId,
                         leaderBuyQuantity = trade.size.toSafeBigDecimal(),  // 存储 Leader 买入数量（用于固定金额模式计算卖出比例）
                         quantity = finalBuyQuantity,  // 使用最终数量（可能已调整），临时值
                         price = buyPrice,  // 使用下单价格，临时值

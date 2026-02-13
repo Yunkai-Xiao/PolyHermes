@@ -14,8 +14,11 @@ import com.wrbug.polymarketbot.websocket.PolymarketWebSocketClient
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.OffsetDateTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -34,6 +37,9 @@ class PolymarketActivityWsService(
 
     private val websocketUrl: String = PolymarketConstants.ACTIVITY_WS_URL
 
+    @Value("\${copytrading.subscription.stale-trade-grace-ms:300000}")
+    private var staleTradeGraceMs: Long = 300000L
+
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     // 单例 WebSocket 客户端
@@ -41,6 +47,10 @@ class PolymarketActivityWsService(
 
     // 要监听的 Leader 地址集合（小写地址 -> leaderId）
     private val monitoredAddresses = ConcurrentHashMap<String, Long>()
+
+    // Leader 开始监听时间（leaderId -> 毫秒时间戳）
+    // 用于过滤“订阅前很久”的旧交易事件
+    private val leaderMonitoringStartTimes = ConcurrentHashMap<Long, Long>()
 
     // 存储已处理的交易哈希，用于去重（LRU 缓存，保留最近 100 条）
     // 因为同时订阅 trades 和 orders_matched，同一个交易可能被推送两次
@@ -71,10 +81,13 @@ class PolymarketActivityWsService(
      */
     fun start(leaders: List<Leader>) {
         monitoredAddresses.clear()
+        leaderMonitoringStartTimes.clear()
+        val startAt = System.currentTimeMillis()
         leaders.forEach { leader ->
             val leaderId = leader.id
             if (leaderId != null) {
                 monitoredAddresses[leader.leaderAddress.lowercase()] = leaderId
+                leaderMonitoringStartTimes[leaderId] = startAt
             }
         }
 
@@ -92,7 +105,7 @@ class PolymarketActivityWsService(
      * 添加 Leader
      */
     fun addLeader(leader: Leader) {
-        if (leader.id == null) {
+        val leaderId = leader.id ?: run {
             logger.warn("Leader ID 为空，跳过: ${leader.leaderAddress}")
             return
         }
@@ -100,21 +113,19 @@ class PolymarketActivityWsService(
         val address = leader.leaderAddress.lowercase()
         val existingLeaderId = monitoredAddresses[address]
 
-        if (existingLeaderId != null && existingLeaderId == leader.id) {
+        if (existingLeaderId != null && existingLeaderId == leaderId) {
             logger.debug("Leader 已在监听列表中: ${leader.leaderName} (${address})")
             return
         }
 
-        val leaderId = leader.id
-        if (leaderId != null) {
-            monitoredAddresses[address] = leaderId
-            logger.info("添加 Leader 到 Activity WS 监听: ${leader.leaderName} (${address})")
+        monitoredAddresses[address] = leaderId
+        leaderMonitoringStartTimes[leaderId] = System.currentTimeMillis()
+        logger.info("添加 Leader 到 Activity WS 监听: ${leader.leaderName} (${address})")
 
-            // 如果 WebSocket 未连接，连接
-            val client = wsClient
-            if (client == null || !client.isConnected()) {
-                connectAndSubscribe()
-            }
+        // 如果 WebSocket 未连接，连接
+        val client = wsClient
+        if (client == null || !client.isConnected()) {
+            connectAndSubscribe()
         }
     }
 
@@ -127,6 +138,7 @@ class PolymarketActivityWsService(
 
         if (addressToRemove != null) {
             monitoredAddresses.remove(addressToRemove)
+            leaderMonitoringStartTimes.remove(leaderId)
             logger.info("从 Activity WS 监听移除 Leader: leaderId=$leaderId, address=$addressToRemove")
         }
 
@@ -283,7 +295,7 @@ class PolymarketActivityWsService(
         }
 
         // 遍历所有监听的地址
-        for ((address, leaderId) in monitoredAddresses) {
+        for ((address, _) in monitoredAddresses) {
             // 检查 proxyWallet：格式为 "proxyWallet":"0x..."
             if (message.contains("\"proxyWallet\":\"$address\"", ignoreCase = true)) {
                 addressMatchMessages++
@@ -368,6 +380,14 @@ class PolymarketActivityWsService(
             // 解析交易数据
             val trade = parseActivityTrade(payload, leaderId)
             if (trade != null) {
+                val tradeTimestampMs = parseTradeTimestampMillis(trade.timestamp)
+                if (isStaleTradeEvent(leaderId, tradeTimestampMs)) {
+                    logger.debug(
+                        "过滤订阅前旧交易: leaderId=$leaderId, tradeId=${trade.id}, tradeTimestamp=$tradeTimestampMs, startAt=${leaderMonitoringStartTimes[leaderId]}, graceMs=$staleTradeGraceMs"
+                    )
+                    return
+                }
+
                 logger.info("✅ 检测到 Leader 交易: leaderId=$leaderId, address=$traderAddress, side=${trade.side}, market=${trade.market}, size=${trade.size}")
 
                 // 异步处理交易（避免阻塞消息处理）
@@ -440,15 +460,20 @@ class PolymarketActivityWsService(
             val timestamp = when {
                 payload.timestamp == null -> System.currentTimeMillis().toString()
                 payload.timestamp is Number -> {
-                    val ts = (payload.timestamp as Number).toLong()
+                    val ts = payload.timestamp.toLong()
                     // 如果时间戳小于 1e12（秒级），转换为毫秒
                     if (ts < 1e12) (ts * 1000).toString() else ts.toString()
                 }
 
                 payload.timestamp is String -> {
-                    val tsStr = payload.timestamp as String
-                    val ts = tsStr.toLongOrNull() ?: System.currentTimeMillis()
-                    if (ts < 1e12) (ts * 1000).toString() else tsStr
+                    val tsStr = payload.timestamp
+                    val parsed = tsStr.toLongOrNull()
+                    val normalized = when {
+                        parsed == null -> System.currentTimeMillis()
+                        parsed < 1e12 -> parsed * 1000
+                        else -> parsed
+                    }
+                    normalized.toString()
                 }
 
                 else -> System.currentTimeMillis().toString()
@@ -515,6 +540,44 @@ class PolymarketActivityWsService(
     }
 
     /**
+     * 解析交易时间戳为毫秒
+     * 支持毫秒/秒时间戳与 ISO 8601 字符串；无法解析时返回 null（放行，避免漏新单）
+     */
+    private fun parseTradeTimestampMillis(timestamp: String?): Long? {
+        if (timestamp.isNullOrBlank()) {
+            return null
+        }
+
+        val raw = timestamp.trim()
+        raw.toLongOrNull()?.let { ts ->
+            return if (ts < 1_000_000_000_000L) ts * 1000 else ts
+        }
+
+        return try {
+            Instant.parse(raw).toEpochMilli()
+        } catch (_: Exception) {
+            try {
+                OffsetDateTime.parse(raw).toInstant().toEpochMilli()
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * 是否属于订阅前旧事件
+     */
+    private fun isStaleTradeEvent(leaderId: Long, tradeTimestampMs: Long?): Boolean {
+        if (tradeTimestampMs == null) {
+            return false
+        }
+        val startAt = leaderMonitoringStartTimes[leaderId] ?: return false
+        val grace = staleTradeGraceMs.coerceAtLeast(0L)
+        val threshold = startAt - grace
+        return tradeTimestampMs < threshold
+    }
+
+    /**
      * 停止监听
      */
     fun stop() {
@@ -524,6 +587,7 @@ class PolymarketActivityWsService(
         wsClient = null
         isSubscribed = false
         monitoredAddresses.clear()
+        leaderMonitoringStartTimes.clear()
         processedTxHashes.invalidateAll()  // 清空去重缓存
         lastActivityTime = 0
     }
@@ -573,4 +637,3 @@ class PolymarketActivityWsService(
         scope.cancel()
     }
 }
-

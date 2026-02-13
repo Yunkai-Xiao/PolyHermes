@@ -48,7 +48,7 @@ class WebSocketConfig(
         }
 
         // 统一 WebSocket 端点（所有推送服务统一使用此路径，通过 channel 区分）
-        // 支持的频道：position（仓位推送）、order（订单推送）等
+        // 支持的频道：position（仓位推送）、order（订单推送）、notification（实时通知）等
         // 需要 JWT 鉴权
         val unifiedHandler = registry.addHandler(unifiedWebSocketHandler, "/ws")
             .addInterceptors(webSocketAuthInterceptor)
@@ -59,4 +59,3 @@ class WebSocketConfig(
         }
     }
 }
-

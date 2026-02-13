@@ -50,6 +50,9 @@ data class Market(
     
     @Column(name = "end_date")
     val endDate: Long? = null,  // 市场截止时间（毫秒时间戳）
+
+    @Column(name = "resolved_at")
+    val resolvedAt: Long? = null,  // 市场结算时间（毫秒时间戳）
     
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
@@ -57,4 +60,3 @@ data class Market(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Long = System.currentTimeMillis()
 )
-
